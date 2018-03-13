@@ -140,7 +140,7 @@ obs_properties_t* ndi_source_getproperties(void* data) {
         void* private_data)
     {
         #if defined(_WIN32)
-            ShellExecute(NULL, "open", "http://ndi.newtek.com", NULL, NULL, SW_SHOWNORMAL);
+            ShellExecute(NULL, TEXT("open"), TEXT("http://ndi.newtek.com"), NULL, NULL, SW_SHOWNORMAL);
         #elif defined(__linux__) || defined(__APPLE__)
             system("open http://ndi.newtek.com");
         #endif
