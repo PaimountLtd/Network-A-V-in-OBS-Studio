@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 project(obs-ndi)
 
-set(CMAKE_PREFIX_PATH "${QTDIR}")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -52,8 +51,7 @@ if(WIN32)
 
 	find_package(w32-pthreads REQUIRED)
 
-	target_link_libraries(obs-ndi
-		"${OBS_FRONTEND_LIB}"
+	target_link_libraries(obs-ndi 
 		w32-pthreads)
 
 	set(RELEASE_DIR "${PROJECT_SOURCE_DIR}/release")
