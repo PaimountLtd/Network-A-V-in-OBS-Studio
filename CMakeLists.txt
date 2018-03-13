@@ -5,8 +5,14 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
-include(external/FindLibObs.cmake)
-find_package(LibObs REQUIRED)
+
+if (TARGET libobs) 
+	set(NDI_PLUGIN_DIRECTORY "${OBS_PLUGIN_DESTINATION}")
+	set(NDI_DATA_DIRECTORY   "${OBS_DATA_DESTINATION}/obs-plugins/obs-ndi")
+else ()
+	include(external/FindLibObs.cmake)
+	find_package(LibObs REQUIRED)
+endif ()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 	set(ARCH 64)
@@ -21,70 +27,53 @@ set(obs-ndi_SOURCES
 	src/obs-ndi-filter.cpp
 	src/premultiplied-alpha-filter.cpp)
 
-set(obs-ndi_HEADERS
-	src/obs-ndi.h)
+set(obs-ndi_HEADERS src/obs-ndi.h)
 
 add_library(obs-ndi MODULE
 	${obs-ndi_SOURCES}
 	${obs-ndi_HEADERS})
 
-include_directories(
-	"lib/ndi/Include")
-
-target_link_libraries(obs-ndi
-	libobs)
+include_directories("lib/ndi/Include")
+target_link_libraries(obs-ndi libobs)
 
 # Windows
 if(WIN32)
+	if (NOT TARGET libobs)
+		if(ARCH EQUAL 64)
+			set(OBS_ARCH_NAME "64bit")
+			set(OBS_BUILDDIR_ARCH "build64")
+		else()
+			set(OBS_ARCH_NAME "32bit")
+			set(OBS_BUILDDIR_ARCH "build32")
+			add_definitions(/arch:SSE2)
+		endif()
+		set(NDI_PLUGIN_DIRECTORY "${CMAKE_INSTALL_PREFIX}/obs-plugins/${OBS_ARCH_NAME}")
+		set(NDI_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/data/obs-plugins/obs-ndi")
+	endif ()
+
 	add_definitions(/O2)
 	string(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 	message("${CMAKE_CXX_FLAGS_RELEASE}")
 
-	if(ARCH EQUAL 64)
-		set(OBS_ARCH_NAME "64bit")
-		set(OBS_BUILDDIR_ARCH "build64")
-	else()
-		set(OBS_ARCH_NAME "32bit")
-		set(OBS_BUILDDIR_ARCH "build32")
-		add_definitions(/arch:SSE2)
-	endif()
-
 	find_package(w32-pthreads REQUIRED)
+	target_link_libraries(obs-ndi w32-pthreads)
 
-	target_link_libraries(obs-ndi 
-		w32-pthreads)
+	install(
+		FILES "$<TARGET_FILE:obs-ndi>"
+		DESTINATION ${NDI_PLUGIN_DIRECTORY}
+		CONFIGURATIONS Release RelWithDebInfo
+	)
 
-	set(RELEASE_DIR "${PROJECT_SOURCE_DIR}/release")
-	add_custom_command(TARGET obs-ndi POST_BUILD
-		COMMAND if $<CONFIG:Release>==1 (
-			"${CMAKE_COMMAND}" -E make_directory
-				"${RELEASE_DIR}/data/obs-plugins/obs-ndi"
-				"${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
+	install(
+		FILES "$<TARGET_PDB_FILE:obs-ndi>"
+		DESTINATION ${NDI_PLUGIN_DIRECTORY}
+		CONFIGURATIONS Release RelWithDebInfo
+		OPTIONAL
+	)
 
-		COMMAND if $<CONFIG:Release>==1 (
-			"${CMAKE_COMMAND}" -E copy_directory
-				"${PROJECT_SOURCE_DIR}/data"
-				"${RELEASE_DIR}/data/obs-plugins/obs-ndi")
-
-		COMMAND if $<CONFIG:Release>==1 (
-			"${CMAKE_COMMAND}" -E copy
-				"$<TARGET_FILE:obs-ndi>"
-				"${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
-			
-		# Copy to obs-studio dev environment for immediate testing
-		COMMAND if $<CONFIG:Debug>==1 (
-			"${CMAKE_COMMAND}" -E copy
-				"$<TARGET_FILE:obs-ndi>"
-				"${LIBOBS_INCLUDE_DIR}/../${OBS_BUILDDIR_ARCH}/rundir/$<CONFIG>/obs-plugins/${OBS_ARCH_NAME}")
-
-		COMMAND if $<CONFIG:Debug>==1 (
-			"${CMAKE_COMMAND}" -E make_directory
-				"${LIBOBS_INCLUDE_DIR}/../${OBS_BUILDDIR_ARCH}/rundir/$<CONFIG>/data/obs-plugins/obs-ndi")
-
-		COMMAND if $<CONFIG:Debug>==1 (
-			"${CMAKE_COMMAND}" -E copy_directory
-				"${PROJECT_SOURCE_DIR}/data"
-				"${LIBOBS_INCLUDE_DIR}/../${OBS_BUILDDIR_ARCH}/rundir/$<CONFIG>/data/obs-plugins/obs-ndi")
+	install(
+		DIRECTORY data/
+		DESTINATION ${NDI_DATA_DIRECTORY}
 	)
 endif()
 
