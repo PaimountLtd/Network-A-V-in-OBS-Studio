@@ -251,7 +251,7 @@ obs_properties_t* ndi_source_getproperties(void* data)
 		void* private_data)
 	{
 		#if defined(_WIN32)
-			ShellExecute(NULL, "open", "http://ndi.newtek.com", NULL, NULL, SW_SHOWNORMAL);
+			ShellExecute(NULL, TEXT("open"), TEXT("http://ndi.newtek.com"), NULL, NULL, SW_SHOWNORMAL);
 		#elif defined(__linux__) || defined(__APPLE__)
 			int suppresswarning = system("open http://ndi.newtek.com");
 		#endif
@@ -482,8 +482,7 @@ void ndi_source_update(void* data, obs_data_t* settings)
 	}
 }
 
-void ndi_source_shown(void* data)
-{
+void ndi_source_shown(void* data) {
 	auto s = (struct ndi_source*)data;
 
 	if (s->ndi_receiver) {
@@ -512,8 +511,7 @@ void ndi_source_activated(void* data)
 	}
 }
 
-void ndi_source_deactivated(void* data)
-{
+void ndi_source_deactivated(void* data) {
 	auto s = (struct ndi_source*)data;
 
 	if (s->ndi_receiver) {
@@ -540,8 +538,7 @@ void ndi_source_destroy(void* data)
 	bfree(s);
 }
 
-struct obs_source_info create_ndi_source_info()
-{
+struct obs_source_info create_ndi_source_info() {
 	struct obs_source_info ndi_source_info = {};
 	ndi_source_info.id				= "ndi_source";
 	ndi_source_info.type			= OBS_SOURCE_TYPE_INPUT;
