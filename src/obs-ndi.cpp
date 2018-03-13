@@ -23,23 +23,13 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 #include <sys/stat.h>
 
 #include <obs-module.h>
-#include <obs-frontend-api.h>
 #include <util/platform.h>
-#include <QDir>
-#include <QFileInfo>
-#include <QProcess>
-#include <QLibrary>
-#include <QMainWindow>
-#include <QAction>
-#include <QMessageBox>
-#include <QString>
-#include <QStringList>
 
 #include "obs-ndi.h"
 #include "main-output.h"
 #include "preview-output.h"
-#include "Config.h"
-#include "forms/output-settings.h"
+
+#include <iostream>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Stephane Lepin (Palakis)")
@@ -64,175 +54,96 @@ struct obs_source_info alpha_filter_info;
 
 const NDIlib_v3* load_ndilib();
 
+HINSTANCE hGetProcIDDLL;
+
 typedef const NDIlib_v3* (*NDIlib_v3_load_)(void);
-QLibrary* loaded_lib = nullptr;
 
 NDIlib_find_instance_t ndi_finder;
+obs_output_t* main_out;
+bool main_output_running = false;
 
-OutputSettings* output_settings;
+bool obs_module_load(void) {
+    blog(LOG_INFO, "hello ! (version %s)", OBS_NDI_VERSION);
+	
+    ndiLib = load_ndilib();
+    if (!ndiLib) {
+		blog(LOG_ERROR, "Error when loading the library.");
+        return false;
+    }
 
-bool obs_module_load(void)
-{
-	blog(LOG_INFO, "hello ! (version %s)", OBS_NDI_VERSION);
+    if (!ndiLib->NDIlib_initialize()) {
+        blog(LOG_ERROR, "CPU unsupported by NDI library. Module won't load.");
+        return false;
+    }
 
-	QMainWindow* main_window = (QMainWindow*)obs_frontend_get_main_window();
+    blog(LOG_INFO, "NDI library initialized successfully");
 
-	ndiLib = load_ndilib();
-	if (!ndiLib) {
-		const char* msg_string_name = "";
-#ifdef _MSC_VER
-		// Windows
-		msg_string_name = "NDIPlugin.LibError.Message.Win";
-#else
-#ifdef __APPLE__
-		// macOS / OS X
-		msg_string_name = "NDIPlugin.LibError.Message.macOS";
-#else
-		// Linux
-		msg_string_name = "NDIPlugin.LibError.Message.Linux";
-#endif
-#endif
+    NDIlib_find_create_t find_desc = {0};
+    find_desc.show_local_sources = true;
+    find_desc.p_groups = NULL;
+    ndi_finder = ndiLib->NDIlib_find_create_v2(&find_desc);
 
-		QMessageBox::critical(main_window,
-			obs_module_text("NDIPlugin.LibError.Title"),
-			obs_module_text(msg_string_name),
-			QMessageBox::Ok, QMessageBox::NoButton);
-		return false;
+    ndi_source_info = create_ndi_source_info();
+    obs_register_source(&ndi_source_info);
+
+    ndi_filter_info = create_ndi_filter_info();
+    obs_register_source(&ndi_filter_info);
+
+    ndi_audiofilter_info = create_ndi_audiofilter_info();
+    obs_register_source(&ndi_audiofilter_info);
+
+    alpha_filter_info = create_alpha_filter_info();
+    obs_register_source(&alpha_filter_info);
+
+    return true;
+}
+
+void obs_module_unload() {
+    blog(LOG_INFO, "goodbye !");
+
+    if (ndiLib) {
+        ndiLib->NDIlib_find_destroy(ndi_finder);
+        ndiLib->NDIlib_destroy();
+    }
+
+	if (hGetProcIDDLL)
+		FreeLibrary(hGetProcIDDLL);
+}
+
+const char* obs_module_name() {
+    return "obs-ndi";
+}
+
+const char* obs_module_description() {
+    return "NDI input/output integration for OBS Studio";
+}
+
+const NDIlib_v3* load_ndilib() {
+	std::string libFolder = getenv(NDILIB_REDIST_FOLDER);
+	std::string libFile = libFolder + "\\" + NDILIB_LIBRARY_NAME;
+	NDIlib_v3_load_ lib_load = nullptr;
+	// Load NewTek NDI Redist dll
+	hGetProcIDDLL = LoadLibrary(libFile.c_str());
+
+	if (hGetProcIDDLL == NULL) {
+		blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
 	}
+	else {
+		blog(LOG_INFO, "NDI runtime loaded successfully");
 
-	if (!ndiLib->NDIlib_initialize()) {
-		blog(LOG_ERROR, "CPU unsupported by NDI library. Module won't load.");
-		return false;
-	}
+		// Locate function in DLL.
+		lib_load = (NDIlib_v3_load_)GetProcAddress(hGetProcIDDLL, "NDIlib_v3_load");
 
-	blog(LOG_INFO, "NDI library initialized successfully");
-
-	NDIlib_find_create_t find_desc = {0};
-	find_desc.show_local_sources = true;
-	find_desc.p_groups = NULL;
-	ndi_finder = ndiLib->NDIlib_find_create_v2(&find_desc);
-
-	ndi_source_info = create_ndi_source_info();
-	obs_register_source(&ndi_source_info);
-
-	ndi_output_info = create_ndi_output_info();
-	obs_register_output(&ndi_output_info);
-
-	ndi_filter_info = create_ndi_filter_info();
-	obs_register_source(&ndi_filter_info);
-
-	ndi_audiofilter_info = create_ndi_audiofilter_info();
-	obs_register_source(&ndi_audiofilter_info);
-
-	alpha_filter_info = create_alpha_filter_info();
-	obs_register_source(&alpha_filter_info);
-
-	if (main_window) {
-		Config* conf = Config::Current();
-		conf->Load();
-
-		main_output_init(conf->OutputName.toUtf8().constData());
-		preview_output_init(conf->PreviewOutputName.toUtf8().constData());
-
-		// Ui setup
-		QAction* menu_action = (QAction*)obs_frontend_add_tools_menu_qaction(
-			obs_module_text("NDIPlugin.Menu.OutputSettings"));
-
-		obs_frontend_push_ui_translation(obs_module_get_string);
-		output_settings = new OutputSettings(main_window);
-		obs_frontend_pop_ui_translation();
-
-		auto menu_cb = [] {
-			output_settings->ToggleShowHide();
-		};
-		menu_action->connect(menu_action, &QAction::triggered, menu_cb);
-
-		obs_frontend_add_event_callback([](enum obs_frontend_event event,
-			void *private_data)
-		{
-			if (event == OBS_FRONTEND_EVENT_EXIT) {
-				preview_output_stop();
-				main_output_stop();
-
-				preview_output_deinit();
-				main_output_deinit();
-			}
-		}, NULL);
-
-		if (conf->OutputEnabled) {
-			main_output_start(conf->OutputName.toUtf8().constData());
+		// Check if function was located.
+		if (!lib_load) {
+			blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
 		}
-		if (conf->PreviewOutputEnabled) {
-			preview_output_start(conf->PreviewOutputName.toUtf8().constData());
+		else {
+			return lib_load();
+						
 		}
 	}
 
-	return true;
-}
-
-void obs_module_unload()
-{
-	blog(LOG_INFO, "goodbye !");
-
-	if (ndiLib) {
-		ndiLib->NDIlib_find_destroy(ndi_finder);
-		ndiLib->NDIlib_destroy();
-	}
-
-	if (loaded_lib) {
-		delete loaded_lib;
-	}
-}
-
-const char* obs_module_name()
-{
-	return "obs-ndi";
-}
-
-const char* obs_module_description()
-{
-	return "NDI input/output integration for OBS Studio";
-}
-
-const NDIlib_v3* load_ndilib()
-{
-	QStringList locations;
-	locations << QString(qgetenv(NDILIB_REDIST_FOLDER));
-#if defined(__linux__) || defined(__APPLE__)
-	locations << "/usr/lib";
-	locations << "/usr/local/lib";
-#endif
-
-	for (QString path : locations) {
-		blog(LOG_INFO, "Trying '%s'", path.toUtf8().constData());
-		QFileInfo libPath(QDir(path).absoluteFilePath(NDILIB_LIBRARY_NAME));
-
-		if (libPath.exists() && libPath.isFile()) {
-			QString libFilePath = libPath.absoluteFilePath();
-			blog(LOG_INFO, "Found NDI library at '%s'",
-				libFilePath.toUtf8().constData());
-
-			loaded_lib = new QLibrary(libFilePath, nullptr);
-			if (loaded_lib->load()) {
-				blog(LOG_INFO, "NDI runtime loaded successfully");
-
-				NDIlib_v3_load_ lib_load =
-					(NDIlib_v3_load_)loaded_lib->resolve("NDIlib_v3_load");
-
-				if (lib_load != nullptr) {
-					return lib_load();
-				}
-				else {
-					blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
-				}
-			}
-			else {
-				delete loaded_lib;
-				loaded_lib = nullptr;
-			}
-		}
-	}
-
-	blog(LOG_ERROR, "Can't find the NDI library");
-	return nullptr;
+    blog(LOG_ERROR, "Can't find the NDI library");
+    return nullptr;
 }

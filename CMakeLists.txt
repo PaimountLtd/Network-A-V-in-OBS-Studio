@@ -8,8 +8,6 @@ set(CMAKE_AUTOUIC ON)
 
 include(external/FindLibObs.cmake)
 find_package(LibObs REQUIRED)
-find_package(Qt5Core REQUIRED)
-find_package(Qt5Widgets REQUIRED)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 	set(ARCH 64)
@@ -22,41 +20,23 @@ set(obs-ndi_SOURCES
 	src/obs-ndi-source.cpp
 	src/obs-ndi-output.cpp
 	src/obs-ndi-filter.cpp
-	src/premultiplied-alpha-filter.cpp
-	src/main-output.cpp
-	src/preview-output.cpp
-	src/Config.cpp
-	src/forms/output-settings.cpp)
+	src/premultiplied-alpha-filter.cpp)
 
 set(obs-ndi_HEADERS
-	src/obs-ndi.h
-	src/main-output.h
-	src/preview-output.h
-	src/Config.h
-	src/forms/output-settings.h)
+	src/obs-ndi.h)
 
 add_library(obs-ndi MODULE
 	${obs-ndi_SOURCES}
 	${obs-ndi_HEADERS})
 
 include_directories(
-	"lib/ndi/Include"
-	"${LIBOBS_INCLUDE_DIR}/../UI/obs-frontend-api"
-	${Qt5Core_INCLUDES}
-	${Qt5Widgets_INCLUDES})
+	"lib/ndi/Include")
 
 target_link_libraries(obs-ndi
-	libobs
-	Qt5::Core
-	Qt5::Widgets)
+	libobs)
 
 # Windows
 if(WIN32)
-	set(OBS_FRONTEND_LIB "OBS_FRONTEND_LIB-NOTFOUND" CACHE FILEPATH "OBS frontend library")
-	if(OBS_FRONTEND_LIB EQUAL "OBS_FRONTEND_LIB-NOTFOUND")
-		message(FATAL_ERROR "Could not find OBS Frontend API\'s library !")
-	endif()
-
 	add_definitions(/O2)
 	string(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 	message("${CMAKE_CXX_FLAGS_RELEASE}")
@@ -92,7 +72,7 @@ if(WIN32)
 			"${CMAKE_COMMAND}" -E copy
 				"$<TARGET_FILE:obs-ndi>"
 				"${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
-
+			
 		# Copy to obs-studio dev environment for immediate testing
 		COMMAND if $<CONFIG:Debug>==1 (
 			"${CMAKE_COMMAND}" -E copy
@@ -113,8 +93,6 @@ endif()
 # OSX
 if(APPLE)
 	set_target_properties(obs-ndi PROPERTIES PREFIX "")
-	target_link_libraries(obs-ndi
-		"${OBS_FRONTEND_LIB}")
 endif()
 
 # Linux
@@ -128,9 +106,6 @@ if(UNIX AND NOT APPLE)
 	endif()
 
 	set_target_properties(obs-ndi PROPERTIES PREFIX "")
-
-	target_link_libraries(obs-ndi
-		obs-frontend-api)
 
 	install(TARGETS obs-ndi
 		LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/obs-plugins)
