@@ -7,9 +7,11 @@ set(CMAKE_AUTOUIC ON)
 
 
 if (TARGET libobs) 
+	set(NDI_EXTERNAL FALSE)
 	set(NDI_PLUGIN_DIRECTORY "${OBS_PLUGIN_DESTINATION}")
 	set(NDI_DATA_DIRECTORY   "${OBS_DATA_DESTINATION}/obs-plugins/obs-ndi")
 else ()
+	set(NDI_EXTERNAL TRUE)
 	include(external/FindLibObs.cmake)
 	find_package(LibObs REQUIRED)
 endif ()
@@ -34,11 +36,10 @@ add_library(obs-ndi MODULE
 	${obs-ndi_HEADERS})
 
 include_directories("lib/ndi/Include")
-target_link_libraries(obs-ndi libobs)
 
 # Windows
 if(WIN32)
-	if (NOT TARGET libobs)
+	if (NDI_EXTERNAL)
 		if(ARCH EQUAL 64)
 			set(OBS_ARCH_NAME "64bit")
 			set(OBS_BUILDDIR_ARCH "build64")
@@ -76,6 +77,8 @@ if(WIN32)
 		DESTINATION ${NDI_DATA_DIRECTORY}
 	)
 endif()
+
+target_link_libraries(obs-ndi libobs)
 
 # OSX
 if(APPLE)
