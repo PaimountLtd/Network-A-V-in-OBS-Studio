@@ -21,7 +21,6 @@ License along with this library. If not, see <https://www.gnu.org/licenses/>
 #endif
 
 #include <obs-module.h>
-#include <obs-frontend-api.h>
 #include <util/platform.h>
 #include <util/threading.h>
 #include <media-io/video-io.h>
@@ -237,10 +236,6 @@ void ndi_filter_update(void* data, obs_data_t* settings) {
     display_desc.zsformat = GS_ZS_NONE;
     display_desc.cx = 0;
     display_desc.cy = 0;
-
-#ifdef _WIN32
-        display_desc.window.hwnd = obs_frontend_get_main_window_handle();
-#endif
 
     if (!s->is_audioonly) {
         s->renderer = obs_display_create(&display_desc);
