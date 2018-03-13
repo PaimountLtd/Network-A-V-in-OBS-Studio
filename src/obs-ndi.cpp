@@ -121,7 +121,7 @@ const NDIlib_v3* load_ndilib() {
 	std::string libFile = libFolder + "\\" + NDILIB_LIBRARY_NAME;
 	NDIlib_v3_load_ lib_load = nullptr;
 	// Load NewTek NDI Redist dll
-	hGetProcIDDLL = LoadLibrary(libFile.c_str());
+	hGetProcIDDLL = LoadLibraryA(libFile.c_str());
 
 	if (hGetProcIDDLL == NULL) {
 		blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
