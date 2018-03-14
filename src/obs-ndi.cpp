@@ -119,11 +119,28 @@ const char* obs_module_description() {
 }
 
 const NDIlib_v3* load_ndilib() {
-	std::string libFolder = getenv(NDILIB_REDIST_FOLDER);
-	std::string libFile = libFolder + "\\" + NDILIB_LIBRARY_NAME;
+    const int szEnvVar = GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), 0, 0);
+
+    if (szEnvVar == 0) return nullptr;
+
+    std::basic_string<TCHAR> strEnvVar;
+    /* Reserve isn't good enough here since
+     * using a basic_string as a buffer will
+     * automatically adjust its size. */
+    strEnvVar.resize(szEnvVar - 1);
+
+    GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), &strEnvVar[0], szEnvVar);
+
+    std::basic_string<TCHAR> strLibName(TEXT(NDILIB_LIBRARY_NAME));
+
+    std::basic_string<TCHAR> strPath;
+    strPath.append(strEnvVar);
+    strPath.append(TEXT("\\"));
+    strPath.append(strLibName);
+
 	NDIlib_v3_load_ lib_load = nullptr;
 	// Load NewTek NDI Redist dll
-	hGetProcIDDLL = LoadLibraryA(libFile.c_str());
+	hGetProcIDDLL = LoadLibrary(strPath.data());
 
 	if (hGetProcIDDLL == NULL) {
 		blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
