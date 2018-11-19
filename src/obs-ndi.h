@@ -24,6 +24,10 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 #define OBS_NDI_VERSION "4.5.3"
 #define OBS_NDI_ALPHA_FILTER_ID "premultiplied_alpha_filter"
 
+// Update these if there is a new version of NDI lib being used by the plugin
+#define NDI_LIB_MAJOR_VERSION_NUMBER 3
+#define NDI_LIB_MINOR_VERSION_NUMBER 7
+
 #define blog(level, msg, ...) blog(level, "[obs-ndi] " msg, ##__VA_ARGS__)
 
 extern const NDIlib_v3* ndiLib;

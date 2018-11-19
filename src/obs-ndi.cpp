@@ -26,10 +26,10 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 #include <util/platform.h>
 
 #include "obs-ndi.h"
-#include "main-output.h"
-#include "preview-output.h"
 
 #include <iostream>
+#include <vector>
+#include <sstream>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Stephane Lepin (Palakis)")
@@ -53,6 +53,7 @@ extern struct obs_source_info create_alpha_filter_info();
 struct obs_source_info alpha_filter_info;
 
 const NDIlib_v3* load_ndilib();
+bool check_ndilib_version(std::string version);
 
 HINSTANCE hGetProcIDDLL;
 
@@ -67,8 +68,16 @@ bool obs_module_load(void) {
 	
     ndiLib = load_ndilib();
     if (!ndiLib) {
-		blog(LOG_ERROR, "Error when loading the library.");
+	blog(LOG_ERROR, "Error when loading the library.");
         return false;
+    }
+
+    std::string version(ndiLib->NDIlib_version());
+
+    if (!check_ndilib_version(version))
+    {
+	blog(LOG_ERROR, "Usupported NDI library version.");
+	return false;
     }
 
     if (!ndiLib->NDIlib_initialize()) {
@@ -106,8 +115,8 @@ void obs_module_unload() {
         ndiLib->NDIlib_destroy();
     }
 
-	if (hGetProcIDDLL)
-		FreeLibrary(hGetProcIDDLL);
+    if (hGetProcIDDLL)
+        FreeLibrary(hGetProcIDDLL);
 }
 
 const char* obs_module_name() {
@@ -138,29 +147,51 @@ const NDIlib_v3* load_ndilib() {
     strPath.append(TEXT("\\"));
     strPath.append(strLibName);
 
-	NDIlib_v3_load_ lib_load = nullptr;
-	// Load NewTek NDI Redist dll
-	hGetProcIDDLL = LoadLibrary(strPath.data());
+    NDIlib_v3_load_ lib_load = nullptr;
+    // Load NewTek NDI Redist dll
+    hGetProcIDDLL = LoadLibrary(strPath.data());
 
-	if (hGetProcIDDLL == NULL) {
-		blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
+    if (hGetProcIDDLL == NULL) {
+        blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
+    }
+    else {
+        blog(LOG_INFO, "NDI runtime loaded successfully");
+
+	// Locate function in DLL.
+	lib_load = (NDIlib_v3_load_)GetProcAddress(hGetProcIDDLL, "NDIlib_v3_load");
+
+	// Check if function was located.
+	if (!lib_load) {
+	    blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
 	}
 	else {
-		blog(LOG_INFO, "NDI runtime loaded successfully");
-
-		// Locate function in DLL.
-		lib_load = (NDIlib_v3_load_)GetProcAddress(hGetProcIDDLL, "NDIlib_v3_load");
-
-		// Check if function was located.
-		if (!lib_load) {
-			blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
-		}
-		else {
-			return lib_load();
-						
-		}
+	    return lib_load();				
 	}
+    }
 
     blog(LOG_ERROR, "Can't find the NDI library");
     return nullptr;
+}
+
+bool check_ndilib_version(std::string version) {
+    std::string versionNumber = version.substr(version.rfind(' ') + 1);
+
+    std::string majorVersionNumber = versionNumber.substr(0, versionNumber.find('.'));
+    versionNumber.erase(0, versionNumber.find('.') + 1);
+
+    std::string minorVersionNumber = versionNumber.substr(0, versionNumber.find('.'));
+    versionNumber.erase(0, versionNumber.find('.') + 1);
+
+    if (std::stoi(majorVersionNumber) < NDI_LIB_MAJOR_VERSION_NUMBER)
+    {
+	return false;
+    }
+
+    if (std::stoi(majorVersionNumber) == NDI_LIB_MAJOR_VERSION_NUMBER &&
+	std::stoi(minorVersionNumber) < NDI_LIB_MINOR_VERSION_NUMBER)
+    {
+        return false;
+    }
+
+    return true;
 }
