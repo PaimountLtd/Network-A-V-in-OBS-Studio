@@ -108,11 +108,13 @@ void ndi_filter_getdefaults(obs_data_t* defaults) {
         obs_module_text("NDIPlugin.FilterProps.NDIName.Default"));
 }
 
-void ndi_filter_raw_video(void* data, video_data* frame) {
+void ndi_filter_raw_video(void *data, struct video_data *streaming_frame,
+			  struct video_data *recording_frame)
+{
 	 auto s = (struct ndi_filter*)data;
 
-    if (!frame || !frame->data[0])
-        return;
+    if (!streaming_frame || !streaming_frame->data[0])
+		 return;
 
     NDIlib_video_frame_v2_t video_frame = { 0 };
     video_frame.xres = s->known_width;
@@ -122,9 +124,9 @@ void ndi_filter_raw_video(void* data, video_data* frame) {
     video_frame.frame_rate_D = s->ovi.fps_den;
     video_frame.picture_aspect_ratio = 0; // square pixels
     video_frame.frame_format_type = NDIlib_frame_format_type_progressive;
-    video_frame.timecode = (frame->timestamp / 100);
-    video_frame.p_data = frame->data[0];
-    video_frame.line_stride_in_bytes = frame->linesize[0];
+    video_frame.timecode = (streaming_frame->timestamp / 100);
+    video_frame.p_data = streaming_frame->data[0];
+    video_frame.line_stride_in_bytes = streaming_frame->linesize[0];
 
     pthread_mutex_lock(&s->ndi_sender_video_mutex);
     ndiLib->NDIlib_send_send_video_v2(s->ndi_sender, &video_frame);
@@ -183,8 +185,9 @@ void ndi_filter_offscreen_render(void* data, uint32_t cx, uint32_t cy) {
         }
 
         struct video_frame output_frame;
-        if (video_output_lock_frame(s->video_output,
-            &output_frame, 1, os_gettime_ns()))
+        if (video_output_lock_frame(s->video_output, &output_frame, 1,
+				    os_gettime_ns(),
+				    OBS_MAIN_VIDEO_RENDERING))
         {
             if (s->video_data) {
 				gs_stagesurface_unmap(s->stagesurface);
