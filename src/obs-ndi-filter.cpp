@@ -184,10 +184,18 @@ void ndi_filter_offscreen_render(void* data, uint32_t cx, uint32_t cy) {
             s->known_height = height;
         }
 
-        struct video_frame output_frame;
-        if (video_output_lock_frame(s->video_output, &output_frame, 1,
-				    os_gettime_ns(),
-				    OBS_MAIN_VIDEO_RENDERING))
+	struct video_frame *output_frames[3];
+	struct video_frame output_frame;
+	output_frames[0] = &output_frame;
+	output_frames[1] = &output_frame;
+	output_frames[2] = &output_frame;
+	uint64_t timestamps[3];
+	timestamps[0] = os_gettime_ns();
+	timestamps[1] = os_gettime_ns();
+	timestamps[2] = os_gettime_ns();
+
+        if (video_output_lock_frame(s->video_output, output_frames, 1,
+				    timestamps))
         {
             if (s->video_data) {
 				gs_stagesurface_unmap(s->stagesurface);
