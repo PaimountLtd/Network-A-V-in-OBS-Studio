@@ -183,8 +183,11 @@ void ndi_filter_offscreen_render(void* data, uint32_t cx, uint32_t cy) {
         }
 
         struct video_frame output_frame;
+        struct video_frame * output_frame_p = &output_frame;
+        auto time_ns = os_gettime_ns();
+
         if (video_output_lock_frame(s->video_output,
-            &output_frame, 1, os_gettime_ns(), OBS_MAIN_VIDEO_RENDERING))
+            &output_frame_p, 1, &time_ns))
         {
             if (s->video_data) {
 				gs_stagesurface_unmap(s->stagesurface);
