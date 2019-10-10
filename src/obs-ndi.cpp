@@ -184,7 +184,7 @@ bool check_ndilib_version(std::string version) {
     try {
         if (std::stoi(majorVersionNumber) < NDI_LIB_MAJOR_VERSION_NUMBER)
         {
-        return false;
+            return false;
         }
 
         if (std::stoi(majorVersionNumber) == NDI_LIB_MAJOR_VERSION_NUMBER &&
