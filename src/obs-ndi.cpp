@@ -192,7 +192,7 @@ bool check_ndilib_version(std::string version) {
         {
             return false;
         }
-    } catch(...) {
+    } catch (...) {
         if (version.compare(".1.0.0") == 0)  { // whitelist ndi broken version
             return true;
         }
