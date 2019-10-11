@@ -199,17 +199,18 @@ void ndi_filter_offscreen_render(void* data, uint32_t cx, uint32_t cy) {
 				gs_stagesurface_unmap(s->stagesurface);
 				s->video_data = nullptr;
 			   }
-
+            obs_video_rendering_mode mode = obs_get_multiple_rendering() ? OBS_STREAMING_VIDEO_RENDERING
+					     : OBS_MAIN_VIDEO_RENDERING;
             gs_stage_texture(s->stagesurface,
                 gs_texrender_get_texture(s->texrender));
             gs_stagesurface_map(s->stagesurface,
 		          &s->video_data, &s->video_linesize);
 
-            uint32_t linesize = output_frame[0].linesize[0];
+            uint32_t linesize = output_frame[mode].linesize[0];
 			   for (uint32_t i = 0; i < s->known_height; ++i) {
 				    uint32_t dst_offset = linesize * i;
 				    uint32_t src_offset = s->video_linesize * i;
-				    memcpy(output_frame[0].data[0] + dst_offset,
+				    memcpy(output_frame[mode].data[0] + dst_offset,
 					     s->video_data + src_offset,
 					     linesize);
 			   }
