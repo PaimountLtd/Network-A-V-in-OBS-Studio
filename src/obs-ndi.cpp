@@ -65,19 +65,19 @@ bool main_output_running = false;
 
 bool obs_module_load(void) {
     blog(LOG_INFO, "hello ! (version %s)", OBS_NDI_VERSION);
-	
+
     ndiLib = load_ndilib();
     if (!ndiLib) {
-	blog(LOG_ERROR, "Error when loading the library.");
+        blog(LOG_ERROR, "Error when loading the library.");
         return false;
     }
 
     std::string version(ndiLib->NDIlib_version());
-
+    
     if (!check_ndilib_version(version))
     {
-	blog(LOG_ERROR, "Usupported NDI library version.");
-	return false;
+        blog(LOG_ERROR, "Usupported NDI library version.");
+        return false;
     }
 
     if (!ndiLib->NDIlib_initialize()) {
@@ -193,7 +193,7 @@ bool check_ndilib_version(std::string version) {
             return false;
         }
     } catch (...) {
-        if (version.compare(".1.0.0") == 0)  { // whitelist ndi broken version
+        if (version.find(" .1.0.0") != std::string::npos)  { // whitelist ndi broken version
             return true;
         }
         return false;
