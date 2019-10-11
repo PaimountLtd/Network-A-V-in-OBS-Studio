@@ -181,15 +181,21 @@ bool check_ndilib_version(std::string version) {
 
     std::string minorVersionNumber = versionNumber.substr(0, versionNumber.find('.'));
     versionNumber.erase(0, versionNumber.find('.') + 1);
+    try {
+        if (std::stoi(majorVersionNumber) < NDI_LIB_MAJOR_VERSION_NUMBER)
+        {
+            return false;
+        }
 
-    if (std::stoi(majorVersionNumber) < NDI_LIB_MAJOR_VERSION_NUMBER)
-    {
-	return false;
-    }
-
-    if (std::stoi(majorVersionNumber) == NDI_LIB_MAJOR_VERSION_NUMBER &&
-	std::stoi(minorVersionNumber) < NDI_LIB_MINOR_VERSION_NUMBER)
-    {
+        if (std::stoi(majorVersionNumber) == NDI_LIB_MAJOR_VERSION_NUMBER &&
+        std::stoi(minorVersionNumber) < NDI_LIB_MINOR_VERSION_NUMBER)
+        {
+            return false;
+        }
+    } catch (...) {
+        if (version.compare(".1.0.0") == 0)  { // whitelist ndi broken version
+            return true;
+        }
         return false;
     }
 

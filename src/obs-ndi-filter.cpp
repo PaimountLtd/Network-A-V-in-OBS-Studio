@@ -182,25 +182,35 @@ void ndi_filter_offscreen_render(void* data, uint32_t cx, uint32_t cy) {
             s->known_height = height;
         }
 
-        struct video_frame output_frame;
+        struct video_frame output_frame[3];
+        struct video_frame * output_frames[3];
+        output_frames[0] = &output_frame[0];
+        output_frames[1] = &output_frame[1];
+        output_frames[2] = &output_frame[2];
+        uint64_t timestamps[3];
+        timestamps[0] = os_gettime_ns();
+        timestamps[1] = os_gettime_ns();
+        timestamps[2] = os_gettime_ns();
+
         if (video_output_lock_frame(s->video_output,
-            &output_frame, 1, os_gettime_ns(), OBS_MAIN_VIDEO_RENDERING))
+            output_frames, 1, timestamps))
         {
             if (s->video_data) {
 				gs_stagesurface_unmap(s->stagesurface);
 				s->video_data = nullptr;
 			   }
-
+            obs_video_rendering_mode mode = obs_get_multiple_rendering() ? OBS_STREAMING_VIDEO_RENDERING
+					     : OBS_MAIN_VIDEO_RENDERING;
             gs_stage_texture(s->stagesurface,
                 gs_texrender_get_texture(s->texrender));
             gs_stagesurface_map(s->stagesurface,
 		          &s->video_data, &s->video_linesize);
 
-            uint32_t linesize = output_frame.linesize[0];
+            uint32_t linesize = output_frame[mode].linesize[0];
 			   for (uint32_t i = 0; i < s->known_height; ++i) {
 				    uint32_t dst_offset = linesize * i;
 				    uint32_t src_offset = s->video_linesize * i;
-				    memcpy(output_frame.data[0] + dst_offset,
+				    memcpy(output_frame[mode].data[0] + dst_offset,
 					     s->video_data + src_offset,
 					     linesize);
 			   }
