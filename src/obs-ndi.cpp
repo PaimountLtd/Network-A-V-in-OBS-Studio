@@ -18,6 +18,8 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 
 #ifdef _WIN32
 #include <Windows.h>
+#else
+#include <dlfcn.h>
 #endif
 
 #include <sys/stat.h>
@@ -55,7 +57,9 @@ struct obs_source_info alpha_filter_info;
 const NDIlib_v3* load_ndilib();
 bool check_ndilib_version(std::string version);
 
+#ifdef WIN32
 HINSTANCE hGetProcIDDLL;
+#endif
 
 typedef const NDIlib_v3* (*NDIlib_v3_load_)(void);
 
@@ -115,8 +119,12 @@ void obs_module_unload() {
         ndiLib->NDIlib_destroy();
     }
 
+#ifdef WIN32
     if (hGetProcIDDLL)
         FreeLibrary(hGetProcIDDLL);
+#else
+//TODO
+#endif
 }
 
 const char* obs_module_name() {
@@ -127,6 +135,7 @@ const char* obs_module_description() {
     return "NDI input/output integration for OBS Studio";
 }
 
+#ifdef WIN32
 const NDIlib_v3* load_ndilib() {
     const int szEnvVar = GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), 0, 0);
 
@@ -172,6 +181,54 @@ const NDIlib_v3* load_ndilib() {
     blog(LOG_ERROR, "Can't find the NDI library");
     return nullptr;
 }
+
+#else
+
+const NDIlib_v3* load_ndilib() {
+    std::vector<const char*> locations;
+    const char* redist_folder = getenv("NDILIB_REDIST_FOLDER");
+
+    if (redist_folder)
+        locations.push_back(redist_folder);
+
+    locations.push_back("/usr/lib/");
+    locations.push_back("/usr/local/lib/");
+
+    for (auto path: locations) {
+        std::string lib = path;
+        lib += NDILIB_LIBRARY_NAME;
+
+        blog(LOG_INFO, "Trying to load lib at: %s", lib.c_str());
+
+        FILE *file = fopen(lib.c_str(), "r");
+        if (!file)
+            continue;
+
+        fclose(file);
+        blog(LOG_INFO, "Found NDI library at '%s'",
+            lib.c_str());
+
+        void *handle = dlopen(lib.c_str(), RTLD_NOW);
+
+        if (!handle)
+            continue;
+
+        blog(LOG_INFO, "NDI runtime loaded successfully");
+
+        NDIlib_v3_load_ lib_load = (NDIlib_v3_load_)dlsym(handle, "NDIlib_v3_load");
+        if (!lib_load) {
+            blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
+        }
+        else {
+            return lib_load();
+        }
+    }
+
+    blog(LOG_ERROR, "Can't find the NDI library");
+	return nullptr;
+}
+
+#endif
 
 bool check_ndilib_version(std::string version) {
     std::string versionNumber = version.substr(version.rfind(' ') + 1);
