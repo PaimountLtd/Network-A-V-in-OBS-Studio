@@ -21,7 +21,7 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 
 #include <Processing.NDI.Lib.h>
 
-#define OBS_NDI_VERSION "4.5.3"
+#define OBS_NDI_VERSION "4.7.1"
 #define OBS_NDI_ALPHA_FILTER_ID "premultiplied_alpha_filter"
 
 // Update these if there is a new version of NDI lib being used by the plugin
@@ -30,6 +30,6 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 
 #define blog(level, msg, ...) blog(level, "[obs-ndi] " msg, ##__VA_ARGS__)
 
-extern const NDIlib_v3* ndiLib;
+extern const NDIlib_v4* ndiLib;
 
 #endif // OBSNDI_H

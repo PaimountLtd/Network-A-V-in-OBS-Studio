@@ -32,24 +32,27 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 #define TEXFORMAT GS_BGRA
 #define FLT_PROP_NAME "ndi_filter_ndiname"
 
-struct ndi_filter {
-    obs_source_t* context;
-    NDIlib_send_instance_t ndi_sender;
-    pthread_mutex_t	ndi_sender_video_mutex;
-    pthread_mutex_t ndi_sender_audio_mutex;
-    struct obs_video_info ovi;
-    struct obs_audio_info oai;
+struct ndi_filter
+{
+	obs_source_t* context;
+	NDIlib_send_instance_t ndi_sender;
+	pthread_mutex_t	ndi_sender_video_mutex;
+	pthread_mutex_t ndi_sender_audio_mutex;
+	struct obs_video_info ovi;
+	struct obs_audio_info oai;
 
-    uint32_t known_width;
-    uint32_t known_height;
+	uint32_t known_width;
+	uint32_t known_height;
 
-    gs_texrender_t* texrender;
-    gs_stagesurf_t* stagesurface;
-    uint8_t* video_data;
-    uint32_t video_linesize;
+	gs_texrender_t* texrender;
+	gs_stagesurf_t* stagesurface;
+	uint8_t* video_data;
+	uint32_t video_linesize;
 
-    video_t* video_output;
-    bool is_audioonly;
+	video_t* video_output;
+	bool is_audioonly;
+
+	os_performance_token_t* perf_token;
 };
 
 const char* ndi_filter_getname(void* data) {
@@ -108,79 +111,83 @@ void ndi_filter_getdefaults(obs_data_t* defaults) {
         obs_module_text("NDIPlugin.FilterProps.NDIName.Default"));
 }
 
-void ndi_filter_raw_video(void* data, struct video_data *streaming_frame, struct video_data *recording_frame) {
-	 auto s = (struct ndi_filter*)data;
+void ndi_filter_raw_video(void* data, struct video_data *streaming_frame, struct video_data *recording_frame)
+{
+	auto s = (struct ndi_filter*)data;
 
     if (!streaming_frame || !streaming_frame->data[0])
         return;
 
-    NDIlib_video_frame_v2_t video_frame = { 0 };
-    video_frame.xres = s->known_width;
-    video_frame.yres = s->known_height;
-    video_frame.FourCC = NDIlib_FourCC_type_BGRA;
-    video_frame.frame_rate_N = s->ovi.fps_num;
-    video_frame.frame_rate_D = s->ovi.fps_den;
-    video_frame.picture_aspect_ratio = 0; // square pixels
-    video_frame.frame_format_type = NDIlib_frame_format_type_progressive;
-    video_frame.timecode = (streaming_frame->timestamp / 100);
-    video_frame.p_data = streaming_frame->data[0];
-    video_frame.line_stride_in_bytes = streaming_frame->linesize[0];
+	NDIlib_video_frame_v2_t video_frame = { 0 };
+	video_frame.xres = s->known_width;
+	video_frame.yres = s->known_height;
+	video_frame.FourCC = NDIlib_FourCC_type_BGRA;
+	video_frame.frame_rate_N = s->ovi.fps_num;
+	video_frame.frame_rate_D = s->ovi.fps_den;
+	video_frame.picture_aspect_ratio = 0; // square pixels
+	video_frame.frame_format_type = NDIlib_frame_format_type_progressive;
+	video_frame.timecode = (streaming_frame->timestamp / 100);
+	video_frame.p_data = streaming_frame->data[0];
+	video_frame.line_stride_in_bytes = streaming_frame->linesize[0];
 
-    pthread_mutex_lock(&s->ndi_sender_video_mutex);
-    ndiLib->NDIlib_send_send_video_v2(s->ndi_sender, &video_frame);
-    pthread_mutex_unlock(&s->ndi_sender_video_mutex);
+	pthread_mutex_lock(&s->ndi_sender_video_mutex);
+	ndiLib->send_send_video_v2(s->ndi_sender, &video_frame);
+	pthread_mutex_unlock(&s->ndi_sender_video_mutex);
 }
 
 void ndi_filter_offscreen_render(void* data, uint32_t cx, uint32_t cy) {
 	auto s = (struct ndi_filter*)data;
 
-    obs_source_t* target = obs_filter_get_target(s->context);
-    if (!target) {
-        return;
-    }
+	obs_source_t* target = obs_filter_get_parent(s->context);
+	if (!target) {
+		return;
+	}
 
-    uint32_t width = obs_source_get_base_width(target);
-    uint32_t height = obs_source_get_base_height(target);
+	uint32_t width = obs_source_get_base_width(target);
+	uint32_t height = obs_source_get_base_height(target);
 
-    gs_texrender_reset(s->texrender);
+	gs_texrender_reset(s->texrender);
 
-    if (gs_texrender_begin(s->texrender, width, height)) {
-        struct vec4 background;
-        vec4_zero(&background);
+	if (gs_texrender_begin(s->texrender, width, height)) {
+		struct vec4 background;
+		vec4_zero(&background);
 
-        gs_blend_state_push();
-		  gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+		gs_clear(GS_CLEAR_COLOR, &background, 0.0f, 0);
+		gs_ortho(0.0f, (float)width, 0.0f, (float)height, -100.0f, 100.0f);
 
-        obs_source_video_render(target);
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
 
-        gs_blend_state_pop();
-        gs_texrender_end(s->texrender);
+		obs_source_video_render(target);
 
-        if (s->known_width != width || s->known_height != height) {
+		gs_blend_state_pop();
+		gs_texrender_end(s->texrender);
 
-            gs_stagesurface_destroy(s->stagesurface);
-            s->stagesurface =
-                gs_stagesurface_create(width, height, TEXFORMAT);
+		if (s->known_width != width || s->known_height != height) {
 
-            video_output_info vi;
-            vi.format = VIDEO_FORMAT_BGRA;
-            vi.width = width;
-            vi.height = height;
-            vi.fps_den = s->ovi.fps_den;
-            vi.fps_num = s->ovi.fps_num;
-            vi.cache_size = 1;
-            vi.colorspace = VIDEO_CS_DEFAULT;
-            vi.range = VIDEO_RANGE_DEFAULT;
-            vi.name = obs_source_get_name(s->context);
+			gs_stagesurface_destroy(s->stagesurface);
+			s->stagesurface =
+				gs_stagesurface_create(width, height, TEXFORMAT);
 
-            video_output_close(s->video_output);
-            video_output_open(&s->video_output, &vi);
-            video_output_connect(s->video_output,
-                nullptr, ndi_filter_raw_video, s);
+			video_output_info vi = {0};
+			vi.format = VIDEO_FORMAT_BGRA;
+			vi.width = width;
+			vi.height = height;
+			vi.fps_den = s->ovi.fps_den;
+			vi.fps_num = s->ovi.fps_num;
+			vi.cache_size = 16;
+			vi.colorspace = VIDEO_CS_DEFAULT;
+			vi.range = VIDEO_RANGE_DEFAULT;
+			vi.name = obs_source_get_name(s->context);
 
-            s->known_width = width;
-            s->known_height = height;
-        }
+			video_output_close(s->video_output);
+			video_output_open(&s->video_output, &vi);
+			video_output_connect(s->video_output,
+				nullptr, ndi_filter_raw_video, s);
+
+			s->known_width = width;
+			s->known_height = height;
+		}
 
         struct video_frame output_frame[3];
         struct video_frame * output_frames[3];
@@ -192,10 +199,10 @@ void ndi_filter_offscreen_render(void* data, uint32_t cx, uint32_t cy) {
         timestamps[1] = os_gettime_ns();
         timestamps[2] = os_gettime_ns();
 
-        if (video_output_lock_frame(s->video_output,
-            output_frames, 1, timestamps))
-        {
-            if (s->video_data) {
+		if (video_output_lock_frame(s->video_output,
+			output_frames, 1, timestamps))
+		{
+			if (s->video_data) {
 				gs_stagesurface_unmap(s->stagesurface);
 				s->video_data = nullptr;
 			   }
@@ -235,8 +242,8 @@ void ndi_filter_update(void* data, obs_data_t* settings) {
     pthread_mutex_lock(&s->ndi_sender_video_mutex);
     pthread_mutex_lock(&s->ndi_sender_audio_mutex);
 
-    ndiLib->NDIlib_send_destroy(s->ndi_sender);
-    s->ndi_sender = ndiLib->NDIlib_send_create(&send_desc);
+	ndiLib->send_destroy(s->ndi_sender);
+	s->ndi_sender = ndiLib->send_create(&send_desc);
 
     pthread_mutex_unlock(&s->ndi_sender_audio_mutex);
     pthread_mutex_unlock(&s->ndi_sender_video_mutex);
@@ -246,28 +253,32 @@ void ndi_filter_update(void* data, obs_data_t* settings) {
     }
 }
 
-void* ndi_filter_create(obs_data_t* settings, obs_source_t* source) {
-    auto s = (struct ndi_filter*)bzalloc(sizeof(struct ndi_filter));
-    s->is_audioonly = false;
-    s->context = source;
-    s->texrender = gs_texrender_create(TEXFORMAT, GS_ZS_NONE);
-    s->video_data = nullptr;
-    pthread_mutex_init(&s->ndi_sender_video_mutex, NULL);
-    pthread_mutex_init(&s->ndi_sender_audio_mutex, NULL);
+void* ndi_filter_create(obs_data_t* settings, obs_source_t* source)
+{
+	auto s = (struct ndi_filter*)bzalloc(sizeof(struct ndi_filter));
+	s->is_audioonly = false;
+	s->context = source;
+	s->texrender = gs_texrender_create(TEXFORMAT, GS_ZS_NONE);
+	s->video_data = nullptr;
+	s->perf_token = os_request_high_performance("NDI Filter");
+	pthread_mutex_init(&s->ndi_sender_video_mutex, NULL);
+	pthread_mutex_init(&s->ndi_sender_audio_mutex, NULL);
 
-    obs_get_video_info(&s->ovi);
-    obs_get_audio_info(&s->oai);
+	obs_get_video_info(&s->ovi);
+	obs_get_audio_info(&s->oai);
 
-    ndi_filter_update(s, settings);
-    return s;
+	ndi_filter_update(s, settings);
+	return s;
 }
 
-void* ndi_filter_create_audioonly(obs_data_t* settings, obs_source_t* source) {
-    auto s = (struct ndi_filter*)bzalloc(sizeof(struct ndi_filter));
-    s->is_audioonly = true;
-    s->context = source;
-    pthread_mutex_init(&s->ndi_sender_audio_mutex, NULL);
-    pthread_mutex_init(&s->ndi_sender_video_mutex, NULL);
+void* ndi_filter_create_audioonly(obs_data_t* settings, obs_source_t* source)
+{
+	auto s = (struct ndi_filter*)bzalloc(sizeof(struct ndi_filter));
+	s->is_audioonly = true;
+	s->context = source;
+	s->perf_token = os_request_high_performance("NDI Filter (Audio Only)");
+	pthread_mutex_init(&s->ndi_sender_audio_mutex, NULL);
+	pthread_mutex_init(&s->ndi_sender_video_mutex, NULL);
 
     obs_get_audio_info(&s->oai);
 
@@ -284,7 +295,7 @@ void ndi_filter_destroy(void* data) {
     pthread_mutex_lock(&s->ndi_sender_video_mutex);
     pthread_mutex_lock(&s->ndi_sender_audio_mutex);
 
-    ndiLib->NDIlib_send_destroy(s->ndi_sender);
+	ndiLib->send_destroy(s->ndi_sender);
 
     pthread_mutex_unlock(&s->ndi_sender_audio_mutex);
     pthread_mutex_unlock(&s->ndi_sender_video_mutex);
@@ -293,15 +304,26 @@ void ndi_filter_destroy(void* data) {
     gs_stagesurface_destroy(s->stagesurface);
     gs_texrender_destroy(s->texrender);
 
-    bfree(s);
+	if (s->perf_token) {
+		os_end_high_performance(s->perf_token);
+	}
+
+	bfree(s);
 }
 
-void ndi_filter_destroy_audioonly(void* data) {
-    auto s = (struct ndi_filter*)data;
-    pthread_mutex_lock(&s->ndi_sender_audio_mutex);
-    ndiLib->NDIlib_send_destroy(s->ndi_sender);
-    pthread_mutex_unlock(&s->ndi_sender_audio_mutex);
-    bfree(s);
+void ndi_filter_destroy_audioonly(void* data)
+{
+	auto s = (struct ndi_filter*)data;
+
+	pthread_mutex_lock(&s->ndi_sender_audio_mutex);
+	ndiLib->send_destroy(s->ndi_sender);
+	pthread_mutex_unlock(&s->ndi_sender_audio_mutex);
+
+	if (s->perf_token) {
+		os_end_high_performance(s->perf_token);
+	}
+
+	bfree(s);
 }
 
 void ndi_filter_tick(void* data, float seconds) {
@@ -316,35 +338,37 @@ void ndi_filter_videorender(void* data, gs_effect_t* effect) {
 }
 
 struct obs_audio_data* ndi_filter_asyncaudio(void *data,
-        struct obs_audio_data* audio_data) {
-    auto s = (struct ndi_filter*)data;
+		struct obs_audio_data* audio_data)
+{
+	auto s = (struct ndi_filter*)data;
 
-    obs_get_audio_info(&s->oai);
+	obs_get_audio_info(&s->oai);
 
-    NDIlib_audio_frame_v2_t audio_frame = { 0 };
-    audio_frame.sample_rate = s->oai.samples_per_sec;
-    audio_frame.no_channels = s->oai.speakers;
-    audio_frame.timecode = (int64_t)(audio_data->timestamp / 100);
-    audio_frame.no_samples = audio_data->frames;
-    audio_frame.channel_stride_in_bytes = audio_frame.no_samples * 4;
+	NDIlib_audio_frame_v2_t audio_frame = { 0 };
+	audio_frame.sample_rate = s->oai.samples_per_sec;
+	audio_frame.no_channels = s->oai.speakers;
+	audio_frame.timecode = (int64_t)(audio_data->timestamp / 100);
+	audio_frame.no_samples = audio_data->frames;
+	audio_frame.channel_stride_in_bytes = audio_frame.no_samples * 4;
 
-    size_t data_size =
-        audio_frame.no_channels * audio_frame.channel_stride_in_bytes;
-    uint8_t* ndi_data = (uint8_t*)bmalloc(data_size);
+	size_t data_size =
+		audio_frame.no_channels * audio_frame.channel_stride_in_bytes;
+	uint8_t* ndi_data = (uint8_t*)bmalloc(data_size);
 
-    for (int i = 0; i < audio_frame.no_channels; ++i) {
-        memcpy(&ndi_data[i * audio_frame.channel_stride_in_bytes],
-            audio_data->data[i],
-            audio_frame.channel_stride_in_bytes);
-    }
-    audio_frame.p_data = (float*)ndi_data;
+	for (int i = 0; i < audio_frame.no_channels; ++i) {
+		memcpy(&ndi_data[i * audio_frame.channel_stride_in_bytes],
+			audio_data->data[i],
+			audio_frame.channel_stride_in_bytes
+		);
+	}
+	audio_frame.p_data = (float*)ndi_data;
 
-    pthread_mutex_lock(&s->ndi_sender_audio_mutex);
-    ndiLib->NDIlib_send_send_audio_v2(s->ndi_sender, &audio_frame);
-    pthread_mutex_unlock(&s->ndi_sender_audio_mutex);
+	pthread_mutex_lock(&s->ndi_sender_audio_mutex);
+	ndiLib->send_send_audio_v2(s->ndi_sender, &audio_frame);
+	pthread_mutex_unlock(&s->ndi_sender_audio_mutex);
 
-    bfree(ndi_data);
-    return audio_data;
+	bfree(ndi_data);
+	return audio_data;
 }
 
 struct obs_source_info create_ndi_filter_info() {

@@ -4,7 +4,7 @@
 #include "idp\idp.iss"
 
 #define MyAppName "obs-ndi"
-#define MyAppVersion "4.5.3"
+#define MyAppVersion "4.7.1"
 #define MyAppPublisher "Stephane Lepin"
 #define MyAppURL "http://github.com/Palakis/obs-ndi"
 
@@ -25,18 +25,25 @@ DefaultGroupName={#MyAppName}
 OutputBaseFilename=obs-ndi-Windows-Installer
 Compression=lzma
 SolidCompression=yes
-LicenseFile=..\LICENSE
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "french"; MessagesFile: "compiler:Languages\French.isl"
+
+[Types]
+Name: "full"; Description: "Full installation"
+Name: "custom"; Description: "Custom installation"; Flags: iscustom
+
+[Components]
+Name: "main"; Description: "NDI Plugin for OBS Studio"; Types: full custom; Flags: fixed
+Name: "ndiruntime"; Description: "NDI Runtime (required by the plugin)"; Types: full custom
 
 [Files]
 Source: "..\release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\LICENSE"; Flags: dontcopy
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Run]
-Filename: "{tmp}\ndi-redist-installer.exe"; Parameters: "/verysilent"
+Filename: "{tmp}\ndi-redist-installer.exe"; StatusMsg: "Install NDI Runtime..."; Components: ndiruntime; Flags: hidewizard
 
 [Icons]
 Name: "{group}\{cm:ProgramOnTheWeb,{#MyAppName}}"; Filename: "{#MyAppURL}"
@@ -44,11 +51,23 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
 [Code]
 const
-  ndiRedistURL = 'http://new.tk/NDIRedistV3';
+  ndiRedistURL = 'http://new.tk/NDIRedistV4';
 
 procedure InitializeWizard;
+var
+  GPLText: AnsiString;
+  Page: TOutputMsgMemoWizardPage;
 begin
-  idpAddFile(ndiRedistUrl, ExpandConstant('{tmp}\ndi-redist-installer.exe'));
+  ExtractTemporaryFile('LICENSE');
+  LoadStringFromFile(ExpandConstant('{tmp}\LICENSE'), GPLText);
+
+  Page := CreateOutputMsgMemoPage(wpWelcome,
+    'License Information', 'Please review the license terms before installing obs-websocket',
+    'Press Page Down to see the rest of the agreement. Once you are aware of your rights, click Next to continue.',
+    String(GPLText)
+  );
+
+  idpAddFileComp(ndiRedistUrl, ExpandConstant('{tmp}\ndi-redist-installer.exe'), 'ndiruntime');
   idpDownloadAfter(wpReady);
 end;
 
@@ -60,7 +79,7 @@ var
 begin
   // initialize default path, which will be returned when the following registry
   // key queries fail due to missing keys or for some different reason
-  Result := '{pf32}\obs-studio';
+  Result := '{pf}\obs-studio';
   // query the first registry value; if this succeeds, return the obtained value
   if RegQueryStringValue(HKLM32, 'SOFTWARE\OBS Studio', '', InstallPath) then
     Result := InstallPath

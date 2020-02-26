@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(obs-ndi)
+project(obs-ndi VERSION 4.6.1)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -35,7 +35,7 @@ add_library(obs-ndi MODULE
 	${obs-ndi_SOURCES}
 	${obs-ndi_HEADERS})
 
-include_directories("lib/ndi/Include")
+include_directories("lib/ndi")
 
 # Windows
 if(WIN32)
@@ -98,7 +98,8 @@ if(UNIX AND NOT APPLE)
 	set_target_properties(obs-ndi PROPERTIES PREFIX "")
 
 	install(TARGETS obs-ndi
-		LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/obs-plugins)
-	install(FILES data/locale/en-US.ini data/locale/fr-FR.ini
+		LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${UNAME_MACHINE}-linux-gnu/obs-plugins)
+
+	install(FILES ${locale_files}
 		DESTINATION "${CMAKE_INSTALL_PREFIX}/share/obs/obs-plugins/obs-ndi/locale")
 endif()
