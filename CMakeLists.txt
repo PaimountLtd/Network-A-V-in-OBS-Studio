@@ -84,10 +84,7 @@ target_link_libraries(obs-ndi libobs)
 if(APPLE)
 	set_target_properties(obs-ndi PROPERTIES PREFIX "")
 
-	install(
-		DIRECTORY data/
-		DESTINATION ${NDI_DATA_DIRECTORY}
-	)
+	install_obs_plugin_with_data(obs-ndi data)
 endif()
 
 # Linux
