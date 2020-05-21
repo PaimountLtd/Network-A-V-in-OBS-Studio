@@ -54,7 +54,7 @@ struct obs_source_info ndi_audiofilter_info;
 extern struct obs_source_info create_alpha_filter_info();
 struct obs_source_info alpha_filter_info;
 
-const NDIlib_v3* load_ndilib();
+const NDIlib_v4* load_ndilib();
 bool check_ndilib_version(std::string version);
 
 #ifdef WIN32
@@ -143,7 +143,7 @@ const char* obs_module_description() {
 }
 
 #ifdef WIN32
-const NDIlib_v3* load_ndilib() {
+const NDIlib_v4* load_ndilib() {
     const int szEnvVar = GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), 0, 0);
 
     if (szEnvVar == 0) return nullptr;
@@ -154,27 +154,16 @@ const NDIlib_v3* load_ndilib() {
      * automatically adjust its size. */
     strEnvVar.resize(szEnvVar - 1);
 
-		obs_frontend_add_event_callback([](enum obs_frontend_event event, void *private_data) {
-			Config* conf = (Config*)private_data;
+    GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), &strEnvVar[0], szEnvVar);
 
-			if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
-				if (conf->OutputEnabled) {
-					main_output_start(conf->OutputName.toUtf8().constData());
-				}
-				if (conf->PreviewOutputEnabled) {
-					preview_output_start(conf->PreviewOutputName.toUtf8().constData());
-				}
-			} else if (event == OBS_FRONTEND_EVENT_EXIT) {
-				preview_output_stop();
-				main_output_stop();
+    std::basic_string<TCHAR> strLibName(TEXT(NDILIB_LIBRARY_NAME));
 
-				preview_output_deinit();
-				main_output_deinit();
-			}
-		}, (void*)conf);
-	}
+    std::basic_string<TCHAR> strPath;
+    strPath.append(strEnvVar);
+    strPath.append(TEXT("\\"));
+    strPath.append(strLibName);
 
-    NDIlib_v3_load_ lib_load = nullptr;
+    NDIlib_v4_load_ lib_load = nullptr;
     // Load NewTek NDI Redist dll
     hGetProcIDDLL = LoadLibrary(strPath.data());
 
@@ -202,7 +191,7 @@ const NDIlib_v3* load_ndilib() {
 
 #else
 
-const NDIlib_v3* load_ndilib() {
+const NDIlib_v4* load_ndilib() {
     std::vector<const char*> locations;
     const char* redist_folder = getenv("NDILIB_REDIST_FOLDER");
 
@@ -235,7 +224,7 @@ const NDIlib_v3* load_ndilib() {
 
         NDIlib_v4_load_ lib_load = (NDIlib_v4_load_)dlsym(handle, "NDIlib_v4_load");
         if (!lib_load) {
-            blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
+            blog(LOG_INFO, "ERROR: NDIlib_v4_load not found in loaded library");
         }
         else {
             return lib_load();
