@@ -56,7 +56,6 @@ if(WIN32)
 	string(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 	message("${CMAKE_CXX_FLAGS_RELEASE}")
 
-	find_package(w32-pthreads REQUIRED)
 	target_link_libraries(obs-ndi w32-pthreads)
 
 	install(
