@@ -165,7 +165,9 @@ const NDIlib_v4* load_ndilib() {
 
     NDIlib_v4_load_ lib_load = nullptr;
     // Load NewTek NDI Redist dll
+    SetDllDirectory(strEnvVar.c_str());
     hGetProcIDDLL = LoadLibrary(strPath.data());
+    SetDllDirectory(NULL);
 
     if (hGetProcIDDLL == NULL) {
         blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
