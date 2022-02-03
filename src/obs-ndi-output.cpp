@@ -43,11 +43,11 @@ static void convert_i444_to_uyvy(uint8_t* input[], uint32_t in_linesize[],
 	uint8_t* _out;
 	uint32_t width = min_uint32(in_linesize[0], out_linesize);
 	for (uint32_t y = start_y; y < end_y; ++y) {
-		_Y = input[0] + (y * in_linesize[0]);
-		_U = input[1] + (y * in_linesize[1]);
-		_V = input[2] + (y * in_linesize[2]);
+		_Y = input[0] + ((size_t)y * (size_t)in_linesize[0]);
+		_U = input[1] + ((size_t)y * (size_t)in_linesize[1]);
+		_V = input[2] + ((size_t)y * (size_t)in_linesize[2]);
 
-		_out = output + (y * out_linesize);
+		_out = output + ((size_t)y * (size_t)out_linesize);
 
 		for (uint32_t x = 0; x < width; x += 2) {
 			// Quality loss here. Some chroma samples are ignored.
@@ -135,12 +135,9 @@ bool ndi_output_start(void* data)
 		switch (format) {
 			case VIDEO_FORMAT_I444:
 				o->conv_function = convert_i444_to_uyvy;
-				if (!o->conv_function) {
-					return false;
-				}
 				o->frame_fourcc = NDIlib_FourCC_video_type_UYVY;
 				o->conv_linesize = width * 2;
-				o->conv_buffer = new uint8_t[height * o->conv_linesize * 2]();
+				o->conv_buffer = new uint8_t[(size_t)height * (size_t)o->conv_linesize * 2]();
 				break;
 
 			case VIDEO_FORMAT_NV12:
@@ -217,8 +214,10 @@ void ndi_output_stop(void* data, uint64_t ts)
 	o->perf_token = NULL;
 
 	ndiLib->send_destroy(o->ndi_sender);
-	delete o->conv_buffer;
-	o->conv_function = nullptr;
+	if (o->conv_buffer) {
+		delete o->conv_buffer;
+		o->conv_function = nullptr;
+	}
 
 	o->frame_width = 0;
 	o->frame_height = 0;
@@ -271,12 +270,11 @@ void ndi_output_rawvideo(void* data, struct video_data* frame)
 	video_frame.xres = width;
 	video_frame.yres = height;
 	video_frame.frame_rate_N = (int)(o->video_framerate * 100);
-	video_frame.frame_rate_D = 100;
-	video_frame.picture_aspect_ratio = (float)width / (float)height;
+	video_frame.frame_rate_D = 100; // TODO fixme: broken on fractional framerates
 	video_frame.frame_format_type = NDIlib_frame_format_type_progressive;
 	video_frame.timecode = (int64_t)(frame->timestamp / 100);
-
 	video_frame.FourCC = o->frame_fourcc;
+
 	if (video_frame.FourCC == NDIlib_FourCC_type_UYVY) {
 		o->conv_function(frame->data, frame->linesize,
 							 0, height,
@@ -299,14 +297,15 @@ void ndi_output_rawaudio(void* data, struct audio_data* frame)
 	if (!o->started || !o->audio_samplerate || !o->audio_channels)
 		return;
 
-	NDIlib_audio_frame_v2_t audio_frame = {0};
+	NDIlib_audio_frame_v3_t audio_frame = {0};
 	audio_frame.sample_rate = o->audio_samplerate;
 	audio_frame.no_channels = (int)o->audio_channels;
 	audio_frame.no_samples = frame->frames;
 	audio_frame.channel_stride_in_bytes = frame->frames * 4;
+	audio_frame.FourCC = NDIlib_FourCC_audio_type_FLTP;
 
 	const size_t data_size =
-		audio_frame.no_channels * audio_frame.channel_stride_in_bytes;
+		(size_t)audio_frame.no_channels * (size_t)audio_frame.channel_stride_in_bytes;
 	if (data_size > o->audio_conv_buffer_size) {
 		if (o->audio_conv_buffer) {
 			bfree(o->audio_conv_buffer);
@@ -316,15 +315,15 @@ void ndi_output_rawaudio(void* data, struct audio_data* frame)
 	}
 
 	for (int i = 0; i < audio_frame.no_channels; ++i) {
-		memcpy(o->audio_conv_buffer + (i * audio_frame.channel_stride_in_bytes),
+		memcpy(o->audio_conv_buffer + ((size_t)i * (size_t)audio_frame.channel_stride_in_bytes),
 			frame->data[i],
 			audio_frame.channel_stride_in_bytes);
 	}
 
-	audio_frame.p_data = (float*)o->audio_conv_buffer;
-	audio_frame.timecode = (int64_t)(frame->timestamp / 100);
+	audio_frame.p_data = o->audio_conv_buffer;
+	audio_frame.timecode = NDIlib_send_timecode_synthesize;
 
-	ndiLib->send_send_audio_v2(o->ndi_sender, &audio_frame);
+	ndiLib->send_send_audio_v3(o->ndi_sender, &audio_frame);
 }
 
 struct obs_output_info create_ndi_output_info()
