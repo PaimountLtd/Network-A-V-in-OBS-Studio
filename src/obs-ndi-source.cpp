@@ -164,10 +164,8 @@ const char* ndi_source_getname(void* data)
 	return obs_module_text("NDIPlugin.NDISourceName");
 }
 
-obs_properties_t* ndi_source_getproperties(void* data)
+obs_properties_t* ndi_source_getproperties(void* /*data*/)
 {
-	auto s = (struct ndi_source*)data;
-
 	obs_properties_t* props = obs_properties_create();
 	obs_properties_set_flags(props, OBS_PROPERTIES_DEFER_UPDATE);
 
@@ -199,7 +197,7 @@ obs_properties_t* ndi_source_getproperties(void* data)
 
 	obs_property_set_modified_callback(bw_modes, [](
 		obs_properties_t *props,
-		obs_property_t *property,
+		obs_property_t */*property*/,
 		obs_data_t *settings)
 	{
 		bool is_audio_only =
@@ -266,9 +264,9 @@ obs_properties_t* ndi_source_getproperties(void* data)
 		obs_module_text("NDIPlugin.SourceProps.Audio"));
 
 	obs_properties_add_button(props, "ndi_website", "NDI.NewTek.com", [](
-		obs_properties_t *pps,
-		obs_property_t *prop,
-		void* private_data)
+		obs_properties_t */*pps*/,
+		obs_property_t */*prop*/,
+		void* /*private_data*/)
 	{
 		#if defined(_WIN32)
 			ShellExecute(NULL, TEXT("open"), TEXT("http://ndi.newtek.com"), NULL, NULL, SW_SHOWNORMAL);
