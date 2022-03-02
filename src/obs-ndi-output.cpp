@@ -203,7 +203,7 @@ bool ndi_output_start(void* data)
 	return o->started;
 }
 
-void ndi_output_stop(void* data, uint64_t ts)
+void ndi_output_stop(void* data, uint64_t /*ts*/)
 {
 	auto o = (struct ndi_output*)data;
 
