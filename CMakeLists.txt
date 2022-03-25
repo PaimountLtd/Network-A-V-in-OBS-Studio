@@ -1,16 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
-project(obs-ndi VERSION 4.9.0)
+project(obs-ndi VERSION 4.6.1)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
-    set(CMAKE_CXX_FLAGS "-mfpu=neon")
-endif()
 
 if (TARGET libobs) 
 	set(NDI_EXTERNAL FALSE)
@@ -18,9 +12,7 @@ if (TARGET libobs)
 	set(NDI_DATA_DIRECTORY   "${OBS_DATA_DESTINATION}/obs-plugins/obs-ndi")
 else ()
 	set(NDI_EXTERNAL TRUE)
-	if (WIN32 OR APPLE)
-		include(external/FindLibObs.cmake)
-	endif()
+	include(external/FindLibObs.cmake)
 	find_package(LibObs REQUIRED)
 endif ()
 
@@ -60,11 +52,6 @@ if(WIN32)
 		set(NDI_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/data/obs-plugins/obs-ndi")
 	endif ()
 
-    if(MSVC)
-        # Enable Multicore Builds and disable FH4 (to not depend on VCRUNTIME140_1.DLL)
-	    add_definitions(/MP /d2FH4-)
-    endif()
-
 	add_definitions(/O2)
 	string(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 	message("${CMAKE_CXX_FLAGS_RELEASE}")
@@ -101,26 +88,19 @@ endif()
 
 # Linux
 if(UNIX AND NOT APPLE)
-	include(GNUInstallDirs)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -mtune=core2 -Ofast")
 
-	if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -mtune=arm7 -Ofast")
+	if(ARCH EQUAL 64)
+		set(ARCH_NAME "x86_64")
 	else()
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -mtune=core2 -Ofast")
+		set(ARCH_NAME "i686")
 	endif()
 
 	set_target_properties(obs-ndi PROPERTIES PREFIX "")
-	target_link_libraries(obs-ndi obs-frontend-api)
 
-	file(GLOB locale_files data/locale/*.ini)
-
-	install(TARGETS obs-ndi LIBRARY
-		DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/obs-plugins")
-	if(${USE_UBUNTU_FIX})
-		install(TARGETS obs-ndi LIBRARY
-			DESTINATION "/usr/lib/obs-plugins")
-	endif()
+	install(TARGETS obs-ndi
+		LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${UNAME_MACHINE}-linux-gnu/obs-plugins)
 
 	install(FILES ${locale_files}
-		DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/obs/obs-plugins/obs-ndi/locale")
+		DESTINATION "${CMAKE_INSTALL_PREFIX}/share/obs/obs-plugins/obs-ndi/locale")
 endif()
