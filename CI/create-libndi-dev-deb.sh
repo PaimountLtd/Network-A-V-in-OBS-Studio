@@ -1,7 +1,5 @@
-#!/bin/bash
-set -ex
+#!/bin/sh
 
-SDK_ROOT="/tmp/ndisdk"
-INCLUDES_PATH="${SDK_ROOT}/include"
+INCLUDES_PATH="/tmp/ndisdk/include"
 
-cp ${INCLUDES_PATH}/*.h /usr/include/
+cp $INCLUDES_PATH/Processing.NDI.* /usr/include/
