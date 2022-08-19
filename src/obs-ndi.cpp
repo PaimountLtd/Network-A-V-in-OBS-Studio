@@ -76,16 +76,11 @@ bool obs_module_load(void) {
         return false;
     }
 
-    std::string version(ndiLib->NDIlib_version());
+    std::string version(ndiLib->version());
     
     if (!check_ndilib_version(version))
     {
         blog(LOG_ERROR, "Usupported NDI library version.");
-        return false;
-    }
-
-    if (!ndiLib->NDIlib_initialize()) {
-        blog(LOG_ERROR, "CPU unsupported by NDI library. Module won't load.");
         return false;
     }
 
@@ -122,8 +117,8 @@ void obs_module_unload() {
     blog(LOG_INFO, "goodbye !");
 
     if (ndiLib) {
-        ndiLib->NDIlib_find_destroy(ndi_finder);
-        ndiLib->NDIlib_destroy();
+	    ndiLib->find_destroy(ndi_finder);
+	    ndiLib->destroy();
     }
 
 #ifdef WIN32

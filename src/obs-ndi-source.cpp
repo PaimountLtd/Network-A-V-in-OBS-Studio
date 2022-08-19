@@ -95,7 +95,6 @@ static obs_source_t* find_filter_by_id(obs_source_t* context, const char* id)
 
 		const char* id = obs_source_get_id(filter);
 		if (strcmp(id, filter_search->query) == 0) {
-			obs_source_addref(filter);
 			filter_search->result = filter;
 		}
 	},
