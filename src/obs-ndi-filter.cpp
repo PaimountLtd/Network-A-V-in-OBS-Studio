@@ -196,8 +196,7 @@ void ndi_filter_offscreen_render(void* data, uint32_t /*cx*/, uint32_t /*cy*/) {
 				gs_stagesurface_unmap(s->stagesurface);
 				s->video_data = nullptr;
 			   }
-            obs_video_rendering_mode mode = obs_get_multiple_rendering() ? OBS_STREAMING_VIDEO_RENDERING
-					     : OBS_MAIN_VIDEO_RENDERING;
+
             gs_stage_texture(s->stagesurface,
                 gs_texrender_get_texture(s->texrender));
             gs_stagesurface_map(s->stagesurface,
