@@ -109,11 +109,11 @@ void ndi_filter_getdefaults(obs_data_t* defaults) {
         obs_module_text("NDIPlugin.FilterProps.NDIName.Default"));
 }
 
-void ndi_filter_raw_video(void* data, struct video_data *streaming_frame, struct video_data */*recording_frame*/)
+void ndi_filter_raw_video(void* data, struct video_data *frame)
 {
 	auto s = (struct ndi_filter*)data;
 
-    if (!streaming_frame || !streaming_frame->data[0])
+    if (!frame || !frame->data[0])
         return;
 
 	NDIlib_video_frame_v2_t video_frame = { 0 };
@@ -124,9 +124,9 @@ void ndi_filter_raw_video(void* data, struct video_data *streaming_frame, struct
 	video_frame.frame_rate_D = s->ovi.fps_den;
 	video_frame.picture_aspect_ratio = 0; // square pixels
 	video_frame.frame_format_type = NDIlib_frame_format_type_progressive;
-	video_frame.timecode = (streaming_frame->timestamp / 100);
-	video_frame.p_data = streaming_frame->data[0];
-	video_frame.line_stride_in_bytes = streaming_frame->linesize[0];
+	video_frame.timecode = (frame->timestamp / 100);
+	video_frame.p_data = frame->data[0];
+	video_frame.line_stride_in_bytes = frame->linesize[0];
 
 	pthread_mutex_lock(&s->ndi_sender_video_mutex);
 	ndiLib->send_send_video_v2(s->ndi_sender, &video_frame);
@@ -187,35 +187,26 @@ void ndi_filter_offscreen_render(void* data, uint32_t /*cx*/, uint32_t /*cy*/) {
 			s->known_height = height;
 		}
 
-        struct video_frame output_frame[3];
-        struct video_frame * output_frames[3];
-        output_frames[0] = &output_frame[0];
-        output_frames[1] = &output_frame[1];
-        output_frames[2] = &output_frame[2];
-        uint64_t timestamps[3];
-        timestamps[0] = os_gettime_ns();
-        timestamps[1] = os_gettime_ns();
-        timestamps[2] = os_gettime_ns();
+        struct video_frame output_frame;
 
 		if (video_output_lock_frame(s->video_output,
-			output_frames, 1, timestamps))
+			&output_frame, 1, os_gettime_ns()))
 		{
 			if (s->video_data) {
 				gs_stagesurface_unmap(s->stagesurface);
 				s->video_data = nullptr;
 			   }
-            obs_video_rendering_mode mode = obs_get_multiple_rendering() ? OBS_STREAMING_VIDEO_RENDERING
-					     : OBS_MAIN_VIDEO_RENDERING;
+
             gs_stage_texture(s->stagesurface,
                 gs_texrender_get_texture(s->texrender));
             gs_stagesurface_map(s->stagesurface,
 		          &s->video_data, &s->video_linesize);
 
-            uint32_t linesize = output_frame[mode].linesize[0];
+            uint32_t linesize = output_frame.linesize[0];
 			   for (uint32_t i = 0; i < s->known_height; ++i) {
 				    uint32_t dst_offset = linesize * i;
 				    uint32_t src_offset = s->video_linesize * i;
-				    memcpy(output_frame[mode].data[0] + dst_offset,
+				    memcpy(output_frame.data[0] + dst_offset,
 					     s->video_data + src_offset,
 					     linesize);
 			   }

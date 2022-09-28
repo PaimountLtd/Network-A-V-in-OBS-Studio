@@ -37,70 +37,9 @@ add_library(obs-ndi MODULE
 
 include_directories("lib/ndi")
 
-# Windows
-if(WIN32)
-	if (NDI_EXTERNAL)
-		if(ARCH EQUAL 64)
-			set(OBS_ARCH_NAME "64bit")
-			set(OBS_BUILDDIR_ARCH "build64")
-		else()
-			set(OBS_ARCH_NAME "32bit")
-			set(OBS_BUILDDIR_ARCH "build32")
-			add_definitions(/arch:SSE2)
-		endif()
-		set(NDI_PLUGIN_DIRECTORY "${CMAKE_INSTALL_PREFIX}/obs-plugins/${OBS_ARCH_NAME}")
-		set(NDI_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/data/obs-plugins/obs-ndi")
-	endif ()
-
-	add_definitions(/O2)
-	string(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-	message("${CMAKE_CXX_FLAGS_RELEASE}")
-
-	target_link_libraries(obs-ndi w32-pthreads)
-
-	install(
-		FILES "$<TARGET_FILE:obs-ndi>"
-		DESTINATION ${NDI_PLUGIN_DIRECTORY}
-		CONFIGURATIONS Release RelWithDebInfo
-	)
-
-	install(
-		FILES "$<TARGET_PDB_FILE:obs-ndi>"
-		DESTINATION ${NDI_PLUGIN_DIRECTORY}
-		CONFIGURATIONS Release RelWithDebInfo
-		OPTIONAL
-	)
-
-	install(
-		DIRECTORY data/
-		DESTINATION ${NDI_DATA_DIRECTORY}
-	)
-endif()
-
 target_link_libraries(obs-ndi libobs)
 
-# OSX
-if(APPLE)
-	set_target_properties(obs-ndi PROPERTIES PREFIX "")
+set_target_properties(obs-ndi PROPERTIES PREFIX "")
 
-	install_obs_plugin_with_data(obs-ndi data)
-endif()
+setup_plugin_target(obs-ndi)
 
-# Linux
-if(UNIX AND NOT APPLE)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -mtune=core2 -Ofast")
-
-	if(ARCH EQUAL 64)
-		set(ARCH_NAME "x86_64")
-	else()
-		set(ARCH_NAME "i686")
-	endif()
-
-	set_target_properties(obs-ndi PROPERTIES PREFIX "")
-
-	install(TARGETS obs-ndi
-		LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${UNAME_MACHINE}-linux-gnu/obs-plugins)
-
-	install(FILES ${locale_files}
-		DESTINATION "${CMAKE_INSTALL_PREFIX}/share/obs/obs-plugins/obs-ndi/locale")
-endif()
