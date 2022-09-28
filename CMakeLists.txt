@@ -1,16 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
-project(obs-ndi VERSION 4.9.0)
+project(obs-ndi VERSION 4.6.1)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
-    set(CMAKE_CXX_FLAGS "-mfpu=neon")
-endif()
 
 if (TARGET libobs) 
 	set(NDI_EXTERNAL FALSE)
@@ -18,9 +12,7 @@ if (TARGET libobs)
 	set(NDI_DATA_DIRECTORY   "${OBS_DATA_DESTINATION}/obs-plugins/obs-ndi")
 else ()
 	set(NDI_EXTERNAL TRUE)
-	if (WIN32 OR APPLE)
-		include(external/FindLibObs.cmake)
-	endif()
+	include(external/FindLibObs.cmake)
 	find_package(LibObs REQUIRED)
 endif ()
 
@@ -50,3 +42,4 @@ target_link_libraries(obs-ndi libobs)
 set_target_properties(obs-ndi PROPERTIES PREFIX "")
 
 setup_plugin_target(obs-ndi)
+

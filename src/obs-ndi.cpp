@@ -165,7 +165,7 @@ const NDIlib_v4* load_ndilib() {
     SetDllDirectory(NULL);
 
     if (hGetProcIDDLL == NULL) {
-        blog(LOG_INFO, "ERROR: NDIlib_4_load not found in loaded library");
+        blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
     }
     else {
         blog(LOG_INFO, "NDI runtime loaded successfully");
@@ -175,7 +175,7 @@ const NDIlib_v4* load_ndilib() {
 
 	// Check if function was located.
 	if (!lib_load) {
-	    blog(LOG_INFO, "ERROR: NDIlib_v4_load not found in loaded library");
+	    blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
 	}
 	else {
 	    return lib_load();				

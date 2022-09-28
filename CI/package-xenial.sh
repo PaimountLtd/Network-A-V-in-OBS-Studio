@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
@@ -18,39 +18,39 @@ rm -rf /tmp/ndisdk
 mv "/tmp/NDI SDK for Linux" /tmp/ndisdk
 ls /tmp/ndisdk
 
-cd $BASE_DIR
+cd /root/obs-ndi
 
-GIT_HASH=$(git rev-parse --short HEAD)
-PKG_VERSION="1-$GIT_HASH-$BRANCH_SHORT_NAME-git"
+export GIT_HASH=$(git rev-parse --short HEAD)
+export PKG_VERSION="1-$GIT_HASH-$TRAVIS_BRANCH-git"
 
-if [[ $BRANCH_FULL_NAME =~ ^refs\/tags\/ ]]; then
-	PKG_VERSION="$BRANCH_SHORT_NAME"
+if [ -n "${TRAVIS_TAG}" ]; then
+	export PKG_VERSION="$TRAVIS_TAG"
 fi
 
-cd ./build
+cd /root/obs-ndi/build
 
-PAGER="cat" sudo checkinstall -y --type=debian --fstrans=no --nodoc \
+PAGER="cat" checkinstall -y --type=debian --fstrans=no --nodoc \
 	--backup=no --deldoc=yes --install=no \
 	--pkgname=obs-ndi --pkgversion="$PKG_VERSION" \
 	--pkglicense="GPLv2" --maintainer="stephane.lepin@gmail.com" \
-	--requires="obs-studio \(\>= 25.0.7\), libndi4 \(\>= ${NDILIB_VERSION}\)" --pkggroup="video" \
+	--requires="libndi4>=$NDILIB_VERSION" --pkggroup="video" \
 	--pkgsource="https://github.com/Palakis/obs-ndi" \
-	--pakdir="../package"
+	--pakdir="/package"
 
-PAGER="cat" sudo checkinstall -y --type=debian --fstrans=no --nodoc \
+PAGER="cat" checkinstall -y --type=debian --fstrans=no --nodoc \
         --backup=no --deldoc=yes --install=no \
-        --pkgname=libndi4 --replaces=libndi3 --pkgversion="$NDILIB_VERSION" \
+        --pkgname=libndi4 --pkgversion="$NDILIB_VERSION" \
         --pkglicense="Proprietary" --maintainer="stephane.lepin@gmail.com" \
        	--pkggroup="video" \
         --pkgsource="http://ndi.newtek.com" \
-        --pakdir="../package" ../CI/create-libndi-deb.sh
+        --pakdir="/package" ../CI/create-libndi-deb.sh
 
-PAGER="cat" sudo checkinstall -y --type=debian --fstrans=no --nodoc \
+PAGER="cat" checkinstall -y --type=debian --fstrans=no --nodoc \
         --backup=no --deldoc=yes --install=no \
-        --pkgname=libndi4-dev --pkgversion="$NDILIB_VERSION" --requires="libndi4 \(\>= ${NDILIB_VERSION}\)" \
+        --pkgname=libndi4-dev --pkgversion="$NDILIB_VERSION" --requires="libndi4>=$NDILIB_VERSION" \
         --pkglicense="Proprietary" --maintainer="stephane.lepin@gmail.com" \
         --pkggroup="video" \
         --pkgsource="http://ndi.newtek.com" \
-        --pakdir="../package" ../CI/create-libndi-dev-deb.sh
+        --pakdir="/package" ../CI/create-libndi-dev-deb.sh
 
-sudo chmod ao+r ../package/*
+chmod ao+r /package/*
