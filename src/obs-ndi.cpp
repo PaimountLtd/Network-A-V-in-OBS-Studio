@@ -37,7 +37,7 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Stephane Lepin (Palakis)")
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-ndi", "en-US")
 
-const NDIlib_v4* ndiLib = nullptr;
+const NDIlib_v4 *ndiLib = nullptr;
 
 extern struct obs_source_info create_ndi_source_info();
 struct obs_source_info ndi_source_info;
@@ -54,37 +54,37 @@ struct obs_source_info ndi_audiofilter_info;
 extern struct obs_source_info create_alpha_filter_info();
 struct obs_source_info alpha_filter_info;
 
-const NDIlib_v4* load_ndilib();
+const NDIlib_v4 *load_ndilib();
 bool check_ndilib_version(std::string version);
 
 #ifdef WIN32
 HINSTANCE hGetProcIDDLL;
 #endif
 
-typedef const NDIlib_v4* (*NDIlib_v4_load_)(void);
+typedef const NDIlib_v4 *(*NDIlib_v4_load_)(void);
 
 NDIlib_find_instance_t ndi_finder;
-obs_output_t* main_out;
+obs_output_t *main_out;
 bool main_output_running = false;
 
-bool obs_module_load(void) {
-    blog(LOG_INFO, "hello ! (version %s)", OBS_NDI_VERSION);
+bool obs_module_load(void)
+{
+	blog(LOG_INFO, "hello ! (version %s)", OBS_NDI_VERSION);
 
-    ndiLib = load_ndilib();
-    if (!ndiLib) {
-        blog(LOG_ERROR, "Error when loading the library.");
-        return false;
-    }
+	ndiLib = load_ndilib();
+	if (!ndiLib) {
+		blog(LOG_ERROR, "Error when loading the library.");
+		return false;
+	}
 
-    std::string version(ndiLib->version());
-    
-    if (!check_ndilib_version(version))
-    {
-        blog(LOG_ERROR, "Usupported NDI library version.");
-        return false;
-    }
+	std::string version(ndiLib->version());
 
-    blog(LOG_INFO, "NDI library initialized successfully");
+	if (!check_ndilib_version(version)) {
+		blog(LOG_ERROR, "Usupported NDI library version.");
+		return false;
+	}
+
+	blog(LOG_INFO, "NDI library initialized successfully");
 
 	if (!ndiLib->initialize()) {
 		blog(LOG_ERROR, "CPU unsupported by NDI library. Module won't load.");
@@ -98,167 +98,167 @@ bool obs_module_load(void) {
 	find_desc.p_groups = NULL;
 	ndi_finder = ndiLib->find_create_v2(&find_desc);
 
-    ndi_source_info = create_ndi_source_info();
-    obs_register_source(&ndi_source_info);
+	ndi_source_info = create_ndi_source_info();
+	obs_register_source(&ndi_source_info);
 
-    ndi_filter_info = create_ndi_filter_info();
-    obs_register_source(&ndi_filter_info);
+	ndi_filter_info = create_ndi_filter_info();
+	obs_register_source(&ndi_filter_info);
 
-    ndi_audiofilter_info = create_ndi_audiofilter_info();
-    obs_register_source(&ndi_audiofilter_info);
+	ndi_audiofilter_info = create_ndi_audiofilter_info();
+	obs_register_source(&ndi_audiofilter_info);
 
-    alpha_filter_info = create_alpha_filter_info();
-    obs_register_source(&alpha_filter_info);
+	alpha_filter_info = create_alpha_filter_info();
+	obs_register_source(&alpha_filter_info);
 
-    return true;
+	return true;
 }
 
-void obs_module_unload() {
-    blog(LOG_INFO, "goodbye !");
+void obs_module_unload()
+{
+	blog(LOG_INFO, "goodbye !");
 
-    if (ndiLib) {
-	    ndiLib->find_destroy(ndi_finder);
-	    ndiLib->destroy();
-    }
+	if (ndiLib) {
+		ndiLib->find_destroy(ndi_finder);
+		ndiLib->destroy();
+	}
 
 #ifdef WIN32
-    if (hGetProcIDDLL)
-        FreeLibrary(hGetProcIDDLL);
+	if (hGetProcIDDLL)
+		FreeLibrary(hGetProcIDDLL);
 #else
 //TODO
 #endif
 }
 
-const char* obs_module_name() {
-    return "obs-ndi";
+const char *obs_module_name()
+{
+	return "obs-ndi";
 }
 
-const char* obs_module_description() {
-    return "NDI input/output integration for OBS Studio";
+const char *obs_module_description()
+{
+	return "NDI input/output integration for OBS Studio";
 }
 
 #ifdef WIN32
-const NDIlib_v4* load_ndilib() {
-    const int szEnvVar = GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), 0, 0);
+const NDIlib_v4 *load_ndilib()
+{
+	const int szEnvVar = GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), 0, 0);
 
-    if (szEnvVar == 0) return nullptr;
+	if (szEnvVar == 0)
+		return nullptr;
 
-    std::basic_string<TCHAR> strEnvVar;
-    /* Reserve isn't good enough here since
+	std::basic_string<TCHAR> strEnvVar;
+	/* Reserve isn't good enough here since
      * using a basic_string as a buffer will
      * automatically adjust its size. */
-    strEnvVar.resize(szEnvVar - 1);
+	strEnvVar.resize(szEnvVar - 1);
 
-    GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), &strEnvVar[0], szEnvVar);
+	GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), &strEnvVar[0], szEnvVar);
 
-    std::basic_string<TCHAR> strLibName(TEXT(NDILIB_LIBRARY_NAME));
+	std::basic_string<TCHAR> strLibName(TEXT(NDILIB_LIBRARY_NAME));
 
-    std::basic_string<TCHAR> strPath;
-    strPath.append(strEnvVar);
-    strPath.append(TEXT("\\"));
-    strPath.append(strLibName);
+	std::basic_string<TCHAR> strPath;
+	strPath.append(strEnvVar);
+	strPath.append(TEXT("\\"));
+	strPath.append(strLibName);
 
-    NDIlib_v4_load_ lib_load = nullptr;
-    // Load NewTek NDI Redist dll
-    SetDllDirectory(strEnvVar.c_str());
-    hGetProcIDDLL = LoadLibrary(strPath.data());
-    SetDllDirectory(NULL);
+	NDIlib_v4_load_ lib_load = nullptr;
+	// Load NewTek NDI Redist dll
+	SetDllDirectory(strEnvVar.c_str());
+	hGetProcIDDLL = LoadLibrary(strPath.data());
+	SetDllDirectory(NULL);
 
-    if (hGetProcIDDLL == NULL) {
-        blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
-    }
-    else {
-        blog(LOG_INFO, "NDI runtime loaded successfully");
+	if (hGetProcIDDLL == NULL) {
+		blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
+	} else {
+		blog(LOG_INFO, "NDI runtime loaded successfully");
 
-	// Locate function in DLL.
-	lib_load = (NDIlib_v4_load_)GetProcAddress(hGetProcIDDLL, "NDIlib_v4_load");
+		// Locate function in DLL.
+		lib_load = (NDIlib_v4_load_)GetProcAddress(hGetProcIDDLL, "NDIlib_v4_load");
 
-	// Check if function was located.
-	if (!lib_load) {
-	    blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
+		// Check if function was located.
+		if (!lib_load) {
+			blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
+		} else {
+			return lib_load();
+		}
 	}
-	else {
-	    return lib_load();				
-	}
-    }
 
-    blog(LOG_ERROR, "Can't find the NDI library");
-    return nullptr;
+	blog(LOG_ERROR, "Can't find the NDI library");
+	return nullptr;
 }
 
 #else
 
-const NDIlib_v4* load_ndilib() {
-    std::vector<const char*> locations;
-    const char* redist_folder = getenv("NDILIB_REDIST_FOLDER");
+const NDIlib_v4 *load_ndilib()
+{
+	std::vector<const char *> locations;
+	const char *redist_folder = getenv("NDILIB_REDIST_FOLDER");
 
-    if (redist_folder)
-        locations.push_back(redist_folder);
+	if (redist_folder)
+		locations.push_back(redist_folder);
 
-    locations.push_back("/usr/lib/");
-    locations.push_back("/usr/local/lib/");
+	locations.push_back("/usr/lib/");
+	locations.push_back("/usr/local/lib/");
 
-    for (auto path: locations) {
-        std::string lib = path;
-        lib += NDILIB_LIBRARY_NAME;
+	for (auto path : locations) {
+		std::string lib = path;
+		lib += NDILIB_LIBRARY_NAME;
 
-        blog(LOG_INFO, "Trying to load lib at: %s", lib.c_str());
+		blog(LOG_INFO, "Trying to load lib at: %s", lib.c_str());
 
-        FILE *file = fopen(lib.c_str(), "r");
-        if (!file)
-            continue;
+		FILE *file = fopen(lib.c_str(), "r");
+		if (!file)
+			continue;
 
-        fclose(file);
-        blog(LOG_INFO, "Found NDI library at '%s'",
-            lib.c_str());
+		fclose(file);
+		blog(LOG_INFO, "Found NDI library at '%s'", lib.c_str());
 
-        void *handle = dlopen(lib.c_str(), RTLD_NOW);
+		void *handle = dlopen(lib.c_str(), RTLD_NOW);
 
-        if (!handle)
-            continue;
+		if (!handle)
+			continue;
 
-        blog(LOG_INFO, "NDI runtime loaded successfully");
+		blog(LOG_INFO, "NDI runtime loaded successfully");
 
-        NDIlib_v4_load_ lib_load = (NDIlib_v4_load_)dlsym(handle, "NDIlib_v4_load");
-        if (!lib_load) {
-            blog(LOG_INFO, "ERROR: NDIlib_v4_load not found in loaded library");
-        }
-        else {
-            return lib_load();
-        }
-    }
+		NDIlib_v4_load_ lib_load = (NDIlib_v4_load_)dlsym(handle, "NDIlib_v4_load");
+		if (!lib_load) {
+			blog(LOG_INFO, "ERROR: NDIlib_v4_load not found in loaded library");
+		} else {
+			return lib_load();
+		}
+	}
 
-    blog(LOG_ERROR, "Can't find the NDI library");
+	blog(LOG_ERROR, "Can't find the NDI library");
 	return nullptr;
 }
 
 #endif
 
-bool check_ndilib_version(std::string version) {
-    std::string versionNumber = version.substr(version.rfind(' ') + 1);
+bool check_ndilib_version(std::string version)
+{
+	std::string versionNumber = version.substr(version.rfind(' ') + 1);
 
-    std::string majorVersionNumber = versionNumber.substr(0, versionNumber.find('.'));
-    versionNumber.erase(0, versionNumber.find('.') + 1);
+	std::string majorVersionNumber = versionNumber.substr(0, versionNumber.find('.'));
+	versionNumber.erase(0, versionNumber.find('.') + 1);
 
-    std::string minorVersionNumber = versionNumber.substr(0, versionNumber.find('.'));
-    versionNumber.erase(0, versionNumber.find('.') + 1);
-    try {
-        if (std::stoi(majorVersionNumber) < NDI_LIB_MAJOR_VERSION_NUMBER)
-        {
-            return false;
-        }
+	std::string minorVersionNumber = versionNumber.substr(0, versionNumber.find('.'));
+	versionNumber.erase(0, versionNumber.find('.') + 1);
+	try {
+		if (std::stoi(majorVersionNumber) < NDI_LIB_MAJOR_VERSION_NUMBER) {
+			return false;
+		}
 
-        if (std::stoi(majorVersionNumber) == NDI_LIB_MAJOR_VERSION_NUMBER &&
-        std::stoi(minorVersionNumber) < NDI_LIB_MINOR_VERSION_NUMBER)
-        {
-            return false;
-        }
-    } catch (...) {
-        if (version.find(" .1.0.0") != std::string::npos)  { // whitelist ndi broken version
-            return true;
-        }
-        return false;
-    }
+		if (std::stoi(majorVersionNumber) == NDI_LIB_MAJOR_VERSION_NUMBER && std::stoi(minorVersionNumber) < NDI_LIB_MINOR_VERSION_NUMBER) {
+			return false;
+		}
+	} catch (...) {
+		if (version.find(" .1.0.0") != std::string::npos) { // whitelist ndi broken version
+			return true;
+		}
+		return false;
+	}
 
-    return true;
+	return true;
 }

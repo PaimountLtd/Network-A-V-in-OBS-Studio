@@ -30,6 +30,6 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 
 #define blog(level, msg, ...) blog(level, "[obs-ndi] " msg, ##__VA_ARGS__)
 
-extern const NDIlib_v4* ndiLib;
+extern const NDIlib_v4 *ndiLib;
 
 #endif // OBSNDI_H

@@ -22,19 +22,17 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 #include "../obs-ndi.h"
 #include "../preview-output.h"
 
-OutputSettings::OutputSettings(QWidget *parent) :
-	QDialog(parent),
-	ui(new Ui::OutputSettings)
+OutputSettings::OutputSettings(QWidget *parent) : QDialog(parent), ui(new Ui::OutputSettings)
 {
 	ui->setupUi(this);
-	connect(ui->buttonBox, SIGNAL(accepted()),
-		this, SLOT(onFormAccepted()));
+	connect(ui->buttonBox, SIGNAL(accepted()), this, SLOT(onFormAccepted()));
 
 	ui->ndiVersionLabel->setText(ndiLib->version());
 }
 
-void OutputSettings::onFormAccepted() {
-	Config* conf = Config::Current();
+void OutputSettings::onFormAccepted()
+{
+	Config *conf = Config::Current();
 
 	conf->OutputEnabled = ui->mainOutputGroupBox->isChecked();
 	conf->OutputName = ui->mainOutputName->text();
@@ -58,14 +56,14 @@ void OutputSettings::onFormAccepted() {
 			preview_output_stop();
 		}
 		preview_output_start(ui->previewOutputName->text().toUtf8().constData());
-	}
-	else {
+	} else {
 		preview_output_stop();
 	}
 }
 
-void OutputSettings::showEvent(QShowEvent* event) {
-	Config* conf = Config::Current();
+void OutputSettings::showEvent(QShowEvent *event)
+{
+	Config *conf = Config::Current();
 
 	ui->mainOutputGroupBox->setChecked(conf->OutputEnabled);
 	ui->mainOutputName->setText(conf->OutputName);
@@ -74,13 +72,15 @@ void OutputSettings::showEvent(QShowEvent* event) {
 	ui->previewOutputName->setText(conf->PreviewOutputName);
 }
 
-void OutputSettings::ToggleShowHide() {
+void OutputSettings::ToggleShowHide()
+{
 	if (!isVisible())
 		setVisible(true);
 	else
 		setVisible(false);
 }
 
-OutputSettings::~OutputSettings() {
+OutputSettings::~OutputSettings()
+{
 	delete ui;
 }
