@@ -1,19 +1,19 @@
 /*
 obs-ndi
-Copyright (C) 2016-2018 Stéphane Lepin <steph  name of author
+Copyright (C) 2016-2023 Stéphane Lepin <stephane.lepin@gmail.com>
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; If not, see <https://www.gnu.org/licenses/>
+You should have received a copy of the GNU General Public License along
+with this program. If not, see <https://www.gnu.org/licenses/>
 */
 
 #ifdef _WIN32
@@ -33,11 +33,13 @@ along with this program; If not, see <https://www.gnu.org/licenses/>
 #include <vector>
 #include <sstream>
 
-OBS_DECLARE_MODULE()
-OBS_MODULE_AUTHOR("Stephane Lepin (Palakis)")
-OBS_MODULE_USE_DEFAULT_LOCALE("obs-ndi", "en-US")
+#include "plugin-macros.generated.h"
 
-const NDIlib_v4* ndiLib = nullptr;
+OBS_DECLARE_MODULE()
+OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
+OBS_MODULE_AUTHOR("Stephane Lepin (Palakis)")
+
+const NDIlib_v4 *ndiLib = nullptr;
 
 extern struct obs_source_info create_ndi_source_info();
 struct obs_source_info ndi_source_info;
@@ -54,181 +56,207 @@ struct obs_source_info ndi_audiofilter_info;
 extern struct obs_source_info create_alpha_filter_info();
 struct obs_source_info alpha_filter_info;
 
-const NDIlib_v4* load_ndilib();
-bool check_ndilib_version(std::string version);
+const NDIlib_v5 *load_ndilib();
 
-#ifdef WIN32
-HINSTANCE hGetProcIDDLL;
+typedef const NDIlib_v5 *(*NDIlib_v5_load_)(void);
+QLibrary *loaded_lib = nullptr;
+
+NDIlib_find_instance_t ndi_finder = nullptr;
+
+OutputSettings *output_settings = nullptr;
+
+bool obs_module_load(void)
+{
+	blog(LOG_INFO, "obs_module_load: hello ! (version %s)", PLUGIN_VERSION);
+
+	QMainWindow *main_window =
+		(QMainWindow *)obs_frontend_get_main_window();
+
+	ndiLib = load_ndilib();
+	if (!ndiLib) {
+		blog(LOG_ERROR,
+		     "obs_module_load: load_ndilib() failed; Module won't load.");
+
+		const char *msg_string_name = "";
+#ifdef _MSC_VER
+		// Windows
+		msg_string_name = "NDIPlugin.LibError.Message.Win";
+#else
+#ifdef __APPLE__
+		// macOS / OS X
+		msg_string_name = "NDIPlugin.LibError.Message.macOS";
+#else
+		// Linux
+		msg_string_name = "NDIPlugin.LibError.Message.Linux";
+#endif
 #endif
 
-typedef const NDIlib_v4* (*NDIlib_v4_load_)(void);
-
-NDIlib_find_instance_t ndi_finder;
-obs_output_t* main_out;
-bool main_output_running = false;
-
-bool obs_module_load(void) {
-    blog(LOG_INFO, "hello ! (version %s)", OBS_NDI_VERSION);
-
-    ndiLib = load_ndilib();
-    if (!ndiLib) {
-        blog(LOG_ERROR, "Error when loading the library.");
-        return false;
-    }
-
-    std::string version(ndiLib->version());
-    
-    if (!check_ndilib_version(version))
-    {
-        blog(LOG_ERROR, "Usupported NDI library version.");
-        return false;
-    }
-
-    blog(LOG_INFO, "NDI library initialized successfully");
-
-	if (!ndiLib->initialize()) {
-		blog(LOG_ERROR, "CPU unsupported by NDI library. Module won't load.");
+		QMessageBox::critical(
+			main_window,
+			obs_module_text("NDIPlugin.LibError.Title"),
+			obs_module_text(msg_string_name), QMessageBox::Ok,
+			QMessageBox::NoButton);
 		return false;
 	}
 
-	blog(LOG_INFO, "NDI library initialized successfully (%s)", ndiLib->version());
+	if (!ndiLib->initialize()) {
+		blog(LOG_ERROR,
+		     "obs_module_load: ndiLib->initialize() failed; CPU unsupported by NDI library. Module won't load.");
+		return false;
+	}
+
+	blog(LOG_INFO,
+	     "obs_module_load: NDI library initialized successfully (%s)",
+	     ndiLib->version());
 
 	NDIlib_find_create_t find_desc = {0};
 	find_desc.show_local_sources = true;
 	find_desc.p_groups = NULL;
 	ndi_finder = ndiLib->find_create_v2(&find_desc);
 
-    ndi_source_info = create_ndi_source_info();
-    obs_register_source(&ndi_source_info);
+  ndi_source_info = create_ndi_source_info();
+  obs_register_source(&ndi_source_info);
 
-    ndi_filter_info = create_ndi_filter_info();
-    obs_register_source(&ndi_filter_info);
+  ndi_filter_info = create_ndi_filter_info();
+  obs_register_source(&ndi_filter_info);
 
-    ndi_audiofilter_info = create_ndi_audiofilter_info();
-    obs_register_source(&ndi_audiofilter_info);
+  ndi_audiofilter_info = create_ndi_audiofilter_info();
+  obs_register_source(&ndi_audiofilter_info);
 
-    alpha_filter_info = create_alpha_filter_info();
-    obs_register_source(&alpha_filter_info);
+	alpha_filter_info = create_alpha_filter_info();
+  obs_register_source(&alpha_filter_info);
 
-    return true;
+	alpha_filter_info = create_alpha_filter_info();
+	obs_register_source(&alpha_filter_info);
+
+	if (main_window) {
+		Config *conf = Config::Current();
+		conf->Load();
+
+		main_output_init(conf->OutputName.toUtf8().constData());
+		preview_output_init(
+			conf->PreviewOutputName.toUtf8().constData());
+
+		// Ui setup
+		QAction *menu_action =
+			(QAction *)obs_frontend_add_tools_menu_qaction(
+				obs_module_text(
+					"NDIPlugin.Menu.OutputSettings"));
+
+		obs_frontend_push_ui_translation(obs_module_get_string);
+		output_settings = new OutputSettings(main_window);
+		obs_frontend_pop_ui_translation();
+
+		auto menu_cb = [] { output_settings->ToggleShowHide(); };
+		menu_action->connect(menu_action, &QAction::triggered, menu_cb);
+
+		obs_frontend_add_event_callback(
+			[](enum obs_frontend_event event, void *private_data) {
+				Config *conf = (Config *)private_data;
+
+				if (event ==
+				    OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+					if (conf->OutputEnabled) {
+						main_output_start(
+							conf->OutputName
+								.toUtf8()
+								.constData());
+					}
+					if (conf->PreviewOutputEnabled) {
+						preview_output_start(
+							conf->PreviewOutputName
+								.toUtf8()
+								.constData());
+					}
+				} else if (event == OBS_FRONTEND_EVENT_EXIT) {
+					preview_output_stop();
+					main_output_stop();
+
+					preview_output_deinit();
+					main_output_deinit();
+				}
+			},
+			(void *)conf);
+	}
+
+	return true;
 }
 
-void obs_module_unload() {
-    blog(LOG_INFO, "goodbye !");
+void obs_module_unload()
+{
+	blog(LOG_INFO, "+obs_module_unload()");
 
-    if (ndiLib) {
-	    ndiLib->find_destroy(ndi_finder);
-	    ndiLib->destroy();
-    }
+	if (ndiLib) {
+		if (ndi_finder) {
+			ndiLib->find_destroy(ndi_finder);
+			ndi_finder = nullptr;
+		}
+		ndiLib->destroy();
+		ndiLib = nullptr;
+	}
 
-#ifdef WIN32
-    if (hGetProcIDDLL)
-        FreeLibrary(hGetProcIDDLL);
-#else
-//TODO
+	if (loaded_lib) {
+		delete loaded_lib;
+	}
+
+	blog(LOG_INFO, "obs_module_unload: goodbye !");
+
+	blog(LOG_INFO, "-obs_module_unload()");
+}
+
+const char *obs_module_name()
+{
+	return "obs-ndi";
+}
+
+const char *obs_module_description()
+{
+	return "NDI input/output integration for OBS Studio";
+}
+
+const NDIlib_v4 *load_ndilib()
+{
+	QStringList locations;
+	QString path = QString(qgetenv(NDILIB_REDIST_FOLDER));
+	if (!path.isEmpty()) {
+		locations << path;
+	}
+#if defined(__linux__) || defined(__APPLE__)
+	locations << "/usr/lib";
+	locations << "/usr/local/lib";
 #endif
-}
-
-const char* obs_module_name() {
-    return "obs-ndi";
-}
-
-const char* obs_module_description() {
-    return "NDI input/output integration for OBS Studio";
-}
-
-#ifdef WIN32
-const NDIlib_v4* load_ndilib() {
-    const int szEnvVar = GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), 0, 0);
-
-    if (szEnvVar == 0) return nullptr;
-
-    std::basic_string<TCHAR> strEnvVar;
-    /* Reserve isn't good enough here since
-     * using a basic_string as a buffer will
-     * automatically adjust its size. */
-    strEnvVar.resize(szEnvVar - 1);
-
-    GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), &strEnvVar[0], szEnvVar);
-
-    std::basic_string<TCHAR> strLibName(TEXT(NDILIB_LIBRARY_NAME));
-
-    std::basic_string<TCHAR> strPath;
-    strPath.append(strEnvVar);
-    strPath.append(TEXT("\\"));
-    strPath.append(strLibName);
-
-    NDIlib_v4_load_ lib_load = nullptr;
-    // Load NewTek NDI Redist dll
-    SetDllDirectory(strEnvVar.c_str());
-    hGetProcIDDLL = LoadLibrary(strPath.data());
-    SetDllDirectory(NULL);
-
-    if (hGetProcIDDLL == NULL) {
-        blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
-    }
-    else {
-        blog(LOG_INFO, "NDI runtime loaded successfully");
-
-	// Locate function in DLL.
-	lib_load = (NDIlib_v4_load_)GetProcAddress(hGetProcIDDLL, "NDIlib_v4_load");
-
-	// Check if function was located.
-	if (!lib_load) {
-	    blog(LOG_INFO, "ERROR: NDIlib_v3_load not found in loaded library");
+	for (QString location : locations) {
+		path = QDir::cleanPath(
+			QDir(location).absoluteFilePath(NDILIB_LIBRARY_NAME));
+		blog(LOG_INFO, "load_ndilib: Trying '%s'",
+		     path.toUtf8().constData());
+		QFileInfo libPath(path);
+		if (libPath.exists() && libPath.isFile()) {
+			path = libPath.absoluteFilePath();
+			blog(LOG_INFO, "load_ndilib: Found NDI library at '%s'",
+			     path.toUtf8().constData());
+			loaded_lib = new QLibrary(path, nullptr);
+			if (loaded_lib->load()) {
+				blog(LOG_INFO,
+				     "load_ndilib: NDI runtime loaded successfully");
+				NDIlib_v5_load_ lib_load =
+					(NDIlib_v5_load_)loaded_lib->resolve(
+						"NDIlib_v5_load");
+				if (lib_load != nullptr) {
+					blog(LOG_INFO,
+					     "load_ndilib: NDIlib_v5_load found");
+					return lib_load();
+				} else {
+					blog(LOG_ERROR,
+					     "load_ndilib: ERROR: NDIlib_v5_load not found in loaded library");
+				}
+			} else {
+				delete loaded_lib;
+				loaded_lib = nullptr;
+			}
+		}
 	}
-	else {
-	    return lib_load();				
-	}
-    }
-
-    blog(LOG_ERROR, "Can't find the NDI library");
-    return nullptr;
-}
-
-#else
-
-const NDIlib_v4* load_ndilib() {
-    std::vector<const char*> locations;
-    const char* redist_folder = getenv("NDILIB_REDIST_FOLDER");
-
-    if (redist_folder)
-        locations.push_back(redist_folder);
-
-    locations.push_back("/usr/lib/");
-    locations.push_back("/usr/local/lib/");
-
-    for (auto path: locations) {
-        std::string lib = path;
-        lib += NDILIB_LIBRARY_NAME;
-
-        blog(LOG_INFO, "Trying to load lib at: %s", lib.c_str());
-
-        FILE *file = fopen(lib.c_str(), "r");
-        if (!file)
-            continue;
-
-        fclose(file);
-        blog(LOG_INFO, "Found NDI library at '%s'",
-            lib.c_str());
-
-        void *handle = dlopen(lib.c_str(), RTLD_NOW);
-
-        if (!handle)
-            continue;
-
-        blog(LOG_INFO, "NDI runtime loaded successfully");
-
-        NDIlib_v4_load_ lib_load = (NDIlib_v4_load_)dlsym(handle, "NDIlib_v4_load");
-        if (!lib_load) {
-            blog(LOG_INFO, "ERROR: NDIlib_v4_load not found in loaded library");
-        }
-        else {
-            return lib_load();
-        }
-    }
-
-    blog(LOG_ERROR, "Can't find the NDI library");
+	blog(LOG_ERROR, "load_ndilib: ERROR: Can't find the NDI library");
 	return nullptr;
 }
 
