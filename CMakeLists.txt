@@ -9,6 +9,16 @@ set(LINUX_MAINTAINER_EMAIL "stephane.lepin@gmail.com")
 
 # Add your custom source files here - header files are optional and only required for visibility
 # e.g. in Xcode or Visual Studio
+if (TARGET libobs) 
+	set(NDI_EXTERNAL FALSE)
+	set(NDI_PLUGIN_DIRECTORY "${OBS_PLUGIN_DESTINATION}")
+	set(NDI_DATA_DIRECTORY   "${OBS_DATA_DESTINATION}/obs-plugins/obs-ndi")
+else ()
+	set(NDI_EXTERNAL TRUE)
+	include(external/FindLibObs.cmake)
+	find_package(LibObs REQUIRED)
+endif ()
+
 target_sources(
   ${CMAKE_PROJECT_NAME}
   PRIVATE src/obs-ndi.cpp
@@ -16,28 +26,10 @@ target_sources(
           src/obs-ndi-source.cpp
           src/obs-ndi-output.cpp
           src/obs-ndi-filter.cpp
-          src/premultiplied-alpha-filter.cpp
-          src/main-output.cpp
-          src/preview-output.cpp
-          src/Config.cpp
-          src/forms/output-settings.cpp
-          src/obs-ndi.h
-          src/main-output.h
-          src/preview-output.h
-          src/Config.h
-          src/forms/output-settings.h)
+          src/premultiplied-alpha-filter.cpp)
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/lib/ndi)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE lib/ndi)
 
-# Import libobs as main plugin dependency
-find_package(libobs REQUIRED)
-include(cmake/ObsPluginHelpers.cmake)
-
-find_package(obs-frontend-api REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::obs-frontend-api)
-
-find_qt(COMPONENTS Widgets Core)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets)
 set_target_properties(
   ${CMAKE_PROJECT_NAME}
   PROPERTIES AUTOMOC ON
