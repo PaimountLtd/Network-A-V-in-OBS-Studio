@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 3.16...3.21)
 project(obs-ndi VERSION 4.11.0)
 add_library(${CMAKE_PROJECT_NAME} MODULE)
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+
 set(PLUGIN_AUTHOR "Stephane Lepin")
 set(MACOS_BUNDLEID "fr.palakis.${CMAKE_PROJECT_NAME}")
 set(LINUX_MAINTAINER_EMAIL "stephane.lepin@gmail.com")
@@ -29,20 +33,16 @@ target_sources(
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/lib/ndi)
 
-# Import libobs as main plugin dependency
-find_package(libobs REQUIRED)
-include(cmake/ObsPluginHelpers.cmake)
-
-find_package(obs-frontend-api REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::obs-frontend-api)
-
-find_qt(COMPONENTS Widgets Core)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets)
-set_target_properties(
-  ${CMAKE_PROJECT_NAME}
-  PROPERTIES AUTOMOC ON
-             AUTOUIC ON
-             AUTORCC ON)
+if (TARGET libobs) 
+	set(NDI_EXTERNAL FALSE)
+	set(NDI_PLUGIN_DIRECTORY "${OBS_PLUGIN_DESTINATION}")
+	set(NDI_DATA_DIRECTORY   "${OBS_DATA_DESTINATION}/obs-plugins/obs-ndi")
+else ()
+	set(NDI_EXTERNAL TRUE)
+	include(external/FindLibObs.cmake)
+	find_package(LibObs REQUIRED)
+	include(cmake/ObsPluginHelpers.cmake)
+endif ()
 
 configure_file(src/plugin-macros.h.in ${CMAKE_SOURCE_DIR}/src/plugin-macros.generated.h)
 
