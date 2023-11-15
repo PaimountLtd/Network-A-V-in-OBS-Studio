@@ -36,9 +36,6 @@ set_target_properties(
              AUTOUIC ON
              AUTORCC ON)
 
-configure_file(src/plugin-macros.h.in ${CMAKE_SOURCE_DIR}/src/plugin-macros.generated.h)
-
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-macros.generated.h)
 
 # /!\ TAKE NOTE: No need to edit things past this point /!\
 
