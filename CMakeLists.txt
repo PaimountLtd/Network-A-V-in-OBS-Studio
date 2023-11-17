@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16...3.21)
 
 project(obs-ndi VERSION 4.11.1)
+
+set(PLUGIN_VERSION "${PROJECT_VERSION}")
+add_definitions(-DPLUGIN_VERSION="${PLUGIN_VERSION}")
+
 add_library(${CMAKE_PROJECT_NAME} MODULE)
 
 set(PLUGIN_AUTHOR "Stephane Lepin")
