@@ -526,6 +526,8 @@ void ndi_source_update(void *data, obs_data_t *settings)
 		(obs_data_get_int(settings, PROP_LATENCY) == PROP_LATENCY_LOW);
 	obs_source_set_async_unbuffered(s->source, is_unbuffered);
 
+	s->audio_enabled = obs_data_get_bool(settings, PROP_AUDIO);
+
 	s->ndi_receiver = ndiLib->recv_create_v3(&recv_desc);
 	if (s->ndi_receiver) {
 		if (hwAccelEnabled) {
