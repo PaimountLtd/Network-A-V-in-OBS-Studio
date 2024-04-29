@@ -309,6 +309,7 @@ void ndi_source_getdefaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, PROP_YUV_COLORSPACE,
 				 PROP_YUV_SPACE_BT709);
 	obs_data_set_default_int(settings, PROP_LATENCY, PROP_LATENCY_NORMAL);
+	obs_data_set_default_bool(settings, PROP_AUDIO, true);
 }
 
 void *ndi_source_poll_audio_video(void *data)
