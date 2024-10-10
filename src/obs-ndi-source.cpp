@@ -26,10 +26,10 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <chrono>
 #include <thread>
 #include <algorithm>
-#include <QString>
+#include <sstream>
+#include <string>
 
 #include "plugin-main.h"
-#include "Config.h"
 
 #define PROP_SOURCE "ndi_source_name"
 #define PROP_BANDWIDTH "ndi_bw_mode"
@@ -77,8 +77,8 @@ typedef struct {
 } ptz_t;
 
 typedef struct {
-	QByteArray ndi_receiver_name;
-	QByteArray ndi_source_name;
+	std::string ndi_receiver_name;
+	std::string ndi_source_name;
 	int bandwidth;
 	int sync_mode;
 	bool framesync_enabled;
@@ -375,10 +375,10 @@ void *ndi_source_thread(void *data)
 {
 	auto s = (ndi_source_t *)data;
 	auto obs_source = s->obs_source;
-	QByteArray obs_source_ndi_receiver_name_utf8 =
-		QString(obs_source_get_name(obs_source)).toUtf8();
+	std::string obs_source_ndi_receiver_name_utf8 =
+		std::string(obs_source_get_name(obs_source));
 	const char *obs_source_ndi_receiver_name =
-		obs_source_ndi_receiver_name_utf8.constData();
+		obs_source_ndi_receiver_name_utf8.c_str();
 	blog(LOG_INFO, "[obs-ndi] +ndi_source_thread('%s'...)",
 	     obs_source_ndi_receiver_name);
 
@@ -424,7 +424,7 @@ void *ndi_source_thread(void *data)
 			obs_source_ndi_receiver_name_utf8 =
 				config_most_recent.ndi_receiver_name;
 			obs_source_ndi_receiver_name =
-				obs_source_ndi_receiver_name_utf8.constData();
+				obs_source_ndi_receiver_name_utf8.c_str();
 			recv_desc.p_ndi_recv_name =
 				obs_source_ndi_receiver_name;
 			blog(LOG_INFO,
@@ -439,7 +439,7 @@ void *ndi_source_thread(void *data)
 
 			reset_recv_desc = &recv_desc;
 			recv_desc.source_to_connect_to.p_ndi_name =
-				config_most_recent.ndi_source_name;
+				config_most_recent.ndi_source_name.c_str();
 			blog(LOG_INFO,
 			     "[obs-ndi] ndi_source_thread: '%s' ndi_source_name changed; Setting recv_desc.source_to_connect_to.p_ndi_name='%s'",
 			     obs_source_ndi_receiver_name,
@@ -873,8 +873,8 @@ void ndi_source_thread_start(ndi_source_t *s)
 	pthread_create(&s->av_thread, nullptr, ndi_source_thread, s);
 	blog(LOG_INFO,
 	     "[obs-ndi] ndi_source_thread_start: '%s' Started A/V ndi_source_thread for NDI source '%s'",
-	     s->config.ndi_receiver_name.constData(),
-	     s->config.ndi_source_name.constData());
+	     s->config.ndi_receiver_name.c_str(),
+	     s->config.ndi_source_name.c_str());
 }
 
 void ndi_source_thread_stop(ndi_source_t *s)
@@ -946,16 +946,9 @@ void ndi_source_update(void *data, obs_data_t *settings)
 	float zoom = (float)obs_data_get_double(settings, PROP_ZOOM);
 	config.ptz = {ptz_enabled, pan, tilt, zoom};
 
-	// Update tally status
-	Config *conf = Config::Current();
-	config.tally.on_preview = conf->TallyPreviewEnabled &&
-				  obs_source_showing(obs_source);
-	config.tally.on_program = conf->TallyProgramEnabled &&
-				  obs_source_active(obs_source);
-
 	s->config = config;
 
-	if (!config.ndi_source_name.isEmpty()) {
+	if (!config.ndi_source_name.empty()) {
 		if (!s->running) {
 			ndi_source_thread_start(s);
 		}
@@ -971,7 +964,6 @@ void ndi_source_shown(void *data)
 	auto s = (ndi_source_t *)data;
 	auto name = obs_source_get_name(s->obs_source);
 	blog(LOG_INFO, "[obs-ndi] ndi_source_shown('%s'...)", name);
-	s->config.tally.on_preview = (Config::Current())->TallyPreviewEnabled;
 }
 
 void ndi_source_hidden(void *data)
@@ -987,7 +979,6 @@ void ndi_source_activated(void *data)
 	auto s = (ndi_source_t *)data;
 	auto name = obs_source_get_name(s->obs_source);
 	blog(LOG_INFO, "[obs-ndi] ndi_source_activated('%s'...)", name);
-	s->config.tally.on_program = (Config::Current())->TallyProgramEnabled;
 }
 
 void ndi_source_deactivated(void *data)
@@ -1003,8 +994,10 @@ void ndi_source_renamed(void *data, calldata_t *)
 	auto s = (ndi_source_t *)data;
 	auto name = obs_source_get_name(s->obs_source);
 	blog(LOG_INFO, "[obs-ndi] ndi_source_renamed: name='%s'", name);
-	s->config.ndi_receiver_name =
-		QString("OBS-NDI '%1'").arg(name).toUtf8();
+
+	std::ostringstream oss;
+	oss << "OBS-NDI '" << name << "'";
+	s->config.ndi_receiver_name = oss.str();
 }
 
 void *ndi_source_create(obs_data_t *settings, obs_source_t *obs_source)
@@ -1014,8 +1007,10 @@ void *ndi_source_create(obs_data_t *settings, obs_source_t *obs_source)
 
 	auto s = (ndi_source_t *)bzalloc(sizeof(ndi_source_t));
 	s->obs_source = obs_source;
-	s->config.ndi_receiver_name =
-		QString("OBS-NDI '%1'").arg(name).toUtf8();
+
+	std::ostringstream oss;
+	oss << "OBS-NDI '" << name << "'";
+	s->config.ndi_receiver_name = oss.str();
 
 	auto sh = obs_source_get_signal_handler(s->obs_source);
 	signal_handler_connect(sh, "rename", ndi_source_renamed, s);

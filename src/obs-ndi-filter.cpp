@@ -21,7 +21,6 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #endif
 
 #include <obs-module.h>
-#include <obs-frontend-api.h>
 #include <util/platform.h>
 #include <util/threading.h>
 #include <media-io/video-io.h>

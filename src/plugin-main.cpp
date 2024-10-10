@@ -18,29 +18,20 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #ifdef _WIN32
 #include <Windows.h>
+#else
+#include <dlfcn.h>
 #endif
 
 #include <sys/stat.h>
 
 #include <obs-module.h>
-#include <plugin-support.h>
-#include <obs-frontend-api.h>
 #include <util/platform.h>
-#include <QDir>
-#include <QFileInfo>
-#include <QProcess>
-#include <QLibrary>
-#include <QMainWindow>
-#include <QAction>
-#include <QMessageBox>
-#include <QString>
-#include <QStringList>
 
 #include "plugin-main.h"
-#include "main-output.h"
-#include "preview-output.h"
-#include "Config.h"
-#include "forms/output-settings.h"
+
+#include <iostream>
+#include <vector>
+#include <sstream>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
@@ -75,47 +66,24 @@ struct obs_source_info alpha_filter_info;
 const NDIlib_v5 *load_ndilib();
 
 typedef const NDIlib_v5 *(*NDIlib_v5_load_)(void);
-QLibrary *loaded_lib = nullptr;
+
+bool check_ndilib_version(std::string version);
+
+#ifdef WIN32
+HINSTANCE hGetProcIDDLL;
+#endif
 
 NDIlib_find_instance_t ndi_finder = nullptr;
 
-OutputSettings *output_settings = nullptr;
-
 bool obs_module_load(void)
 {
-	blog(LOG_INFO,
-	     "[obs-ndi] obs_module_load: you can haz obs-ndi (Version %s)",
-	     PLUGIN_VERSION);
-	blog(LOG_INFO, "Qt Version: %s (runtime), %s (compiled)", qVersion(),
-	     QT_VERSION_STR);
-
-	QMainWindow *main_window =
-		(QMainWindow *)obs_frontend_get_main_window();
+	blog(LOG_INFO, "[obs-ndi] obs_module_load: you can haz obs-ndi");
 
 	ndiLib = load_ndilib();
 	if (!ndiLib) {
 		blog(LOG_ERROR,
 		     "[obs-ndi] obs_module_load: load_ndilib() failed; Module won't load.");
 
-		const char *msg_string_name = "";
-#ifdef _MSC_VER
-		// Windows
-		msg_string_name = "NDIPlugin.LibError.Message.Win";
-#else
-#ifdef __APPLE__
-		// macOS / OS X
-		msg_string_name = "NDIPlugin.LibError.Message.macOS";
-#else
-		// Linux
-		msg_string_name = "NDIPlugin.LibError.Message.Linux";
-#endif
-#endif
-
-		QMessageBox::critical(
-			main_window,
-			obs_module_text("NDIPlugin.LibError.Title"),
-			obs_module_text(msg_string_name), QMessageBox::Ok,
-			QMessageBox::NoButton);
 		return false;
 	}
 
@@ -149,61 +117,6 @@ bool obs_module_load(void)
 	alpha_filter_info = create_alpha_filter_info();
 	obs_register_source(&alpha_filter_info);
 
-	if (main_window) {
-		Config *conf = Config::Current();
-		conf->Load();
-
-		preview_output_init(
-			conf->PreviewOutputName.toUtf8().constData());
-
-		// Ui setup
-		QAction *menu_action =
-			(QAction *)obs_frontend_add_tools_menu_qaction(
-				obs_module_text(
-					"NDIPlugin.Menu.OutputSettings"));
-
-		obs_frontend_push_ui_translation(obs_module_get_string);
-		output_settings = new OutputSettings(main_window);
-		obs_frontend_pop_ui_translation();
-
-		auto menu_cb = [] { output_settings->ToggleShowHide(); };
-		menu_action->connect(menu_action, &QAction::triggered, menu_cb);
-
-		obs_frontend_add_event_callback(
-			[](enum obs_frontend_event event, void *private_data) {
-				if (event ==
-				    OBS_FRONTEND_EVENT_FINISHED_LOADING) {
-#if defined(__linux__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wshadow"
-#endif
-					Config *conf = static_cast<Config *>(
-						private_data);
-#if defined(__linux__)
-#pragma GCC diagnostic pop
-#endif
-					if (conf->OutputEnabled) {
-						main_output_start(
-							conf->OutputName
-								.toUtf8()
-								.constData());
-					}
-					if (conf->PreviewOutputEnabled) {
-						preview_output_start(
-							conf->PreviewOutputName
-								.toUtf8()
-								.constData());
-					}
-				} else if (event == OBS_FRONTEND_EVENT_EXIT) {
-					preview_output_stop();
-					main_output_stop();
-
-					preview_output_deinit();
-				}
-			},
-			static_cast<void *>(conf));
-	}
-
 	return true;
 }
 
@@ -225,59 +138,151 @@ void obs_module_unload(void)
 		ndiLib = nullptr;
 	}
 
-	if (loaded_lib) {
-		delete loaded_lib;
-	}
+#ifdef WIN32
+	if (hGetProcIDDLL)
+		FreeLibrary(hGetProcIDDLL);
+#else
+//TODO
+#endif
 
 	blog(LOG_INFO, "[obs-ndi] obs_module_unload: goodbye !");
 
 	blog(LOG_INFO, "[obs-ndi] -obs_module_unload()");
 }
 
-const NDIlib_v4 *load_ndilib()
+#ifdef WIN32
+const NDIlib_v5 *load_ndilib()
 {
-	QStringList locations;
-	QString path = QString(qgetenv(NDILIB_REDIST_FOLDER));
-	if (!path.isEmpty()) {
-		locations << path;
-	}
-#if defined(__linux__) || defined(__APPLE__)
-	locations << "/usr/lib";
-	locations << "/usr/local/lib";
-#endif
-	for (QString location : locations) {
-		path = QDir::cleanPath(
-			QDir(location).absoluteFilePath(NDILIB_LIBRARY_NAME));
-		blog(LOG_INFO, "[obs-ndi] load_ndilib: Trying '%s'",
-		     path.toUtf8().constData());
-		QFileInfo libPath(path);
-		if (libPath.exists() && libPath.isFile()) {
-			path = libPath.absoluteFilePath();
+	const int szEnvVar =
+		GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), 0, 0);
+
+	if (szEnvVar == 0)
+		return nullptr;
+
+	std::basic_string<TCHAR> strEnvVar;
+	/* Reserve isn't good enough here since
+     * using a basic_string as a buffer will
+     * automatically adjust its size. */
+	strEnvVar.resize(szEnvVar - 1);
+
+	GetEnvironmentVariable(TEXT(NDILIB_REDIST_FOLDER), &strEnvVar[0],
+			       szEnvVar);
+
+	std::basic_string<TCHAR> strLibName(TEXT(NDILIB_LIBRARY_NAME));
+
+	std::basic_string<TCHAR> strPath;
+	strPath.append(strEnvVar);
+	strPath.append(TEXT("\\"));
+	strPath.append(strLibName);
+
+	NDIlib_v5_load_ lib_load = nullptr;
+	// Load NewTek NDI Redist dll
+	SetDllDirectory(strEnvVar.c_str());
+	hGetProcIDDLL = LoadLibrary(strPath.data());
+	SetDllDirectory(NULL);
+
+	if (hGetProcIDDLL == NULL) {
+		blog(LOG_INFO,
+		     "ERROR: NDIlib_v3_load not found in loaded library");
+	} else {
+		blog(LOG_INFO, "NDI runtime loaded successfully");
+
+		// Locate function in DLL.
+		lib_load = (NDIlib_v5_load_)GetProcAddress(hGetProcIDDLL,
+							   "NDIlib_v5_load");
+
+		// Check if function was located.
+		if (!lib_load) {
 			blog(LOG_INFO,
-			     "[obs-ndi] load_ndilib: Found NDI library at '%s'",
-			     path.toUtf8().constData());
-			loaded_lib = new QLibrary(path, nullptr);
-			if (loaded_lib->load()) {
-				blog(LOG_INFO,
-				     "[obs-ndi] load_ndilib: NDI runtime loaded successfully");
-				NDIlib_v5_load_ lib_load =
-					(NDIlib_v5_load_)loaded_lib->resolve(
-						"NDIlib_v5_load");
-				if (lib_load != nullptr) {
-					blog(LOG_INFO,
-					     "[obs-ndi] load_ndilib: NDIlib_v5_load found");
-					return lib_load();
-				} else {
-					blog(LOG_ERROR,
-					     "[obs-ndi] load_ndilib: ERROR: NDIlib_v5_load not found in loaded library");
-				}
-			} else {
-				delete loaded_lib;
-				loaded_lib = nullptr;
-			}
+			     "ERROR: NDIlib_v5_load not found in loaded library");
+		} else {
+			return lib_load();
 		}
 	}
-	blog(LOG_ERROR,
-	     "[obs-ndi] load_ndilib: ERROR: Can't find the NDI library");
+
+	blog(LOG_ERROR, "Can't find the NDI library");
 	return nullptr;
+}
+
+#else
+
+const NDIlib_v5 *load_ndilib()
+{
+	std::vector<const char *> locations;
+	const char *redist_folder = getenv("NDILIB_REDIST_FOLDER");
+
+	if (redist_folder)
+		locations.push_back(redist_folder);
+
+	locations.push_back("/usr/lib/");
+	locations.push_back("/usr/local/lib/");
+
+	for (auto path : locations) {
+		std::string lib = path;
+		lib += NDILIB_LIBRARY_NAME;
+
+		blog(LOG_INFO, "Trying to load lib at: %s", lib.c_str());
+
+		FILE *file = fopen(lib.c_str(), "r");
+		if (!file)
+			continue;
+
+		fclose(file);
+		blog(LOG_INFO, "Found NDI library at '%s'", lib.c_str());
+
+		void *handle = dlopen(lib.c_str(), RTLD_NOW);
+
+		if (!handle)
+			continue;
+
+		blog(LOG_INFO, "NDI runtime loaded successfully");
+
+		NDIlib_v5_load_ lib_load =
+			(NDIlib_v5_load_)dlsym(handle, "NDIlib_v5_load");
+		if (!lib_load) {
+			blog(LOG_INFO,
+			     "ERROR: NDIlib_v5_load not found in loaded library");
+		} else {
+			return lib_load();
+		}
+	}
+
+	blog(LOG_ERROR, "Can't find the NDI library");
+	return nullptr;
+}
+
+#endif
+
+bool check_ndilib_version(std::string version)
+{
+	std::string versionNumber = version.substr(version.rfind(' ') + 1);
+
+	std::string majorVersionNumber =
+		versionNumber.substr(0, versionNumber.find('.'));
+	versionNumber.erase(0, versionNumber.find('.') + 1);
+
+	std::string minorVersionNumber =
+		versionNumber.substr(0, versionNumber.find('.'));
+	versionNumber.erase(0, versionNumber.find('.') + 1);
+	try {
+		if (std::stoi(majorVersionNumber) <
+		    NDI_LIB_MAJOR_VERSION_NUMBER) {
+			return false;
+		}
+
+		if (std::stoi(majorVersionNumber) ==
+			    NDI_LIB_MAJOR_VERSION_NUMBER &&
+		    std::stoi(minorVersionNumber) <
+			    NDI_LIB_MINOR_VERSION_NUMBER) {
+			return false;
+		}
+	} catch (...) {
+		if (version.find(" .1.0.0") !=
+		    std::string::npos) { // whitelist ndi broken version
+			return true;
+		}
+		return false;
+	}
+
+	return true;
 }
